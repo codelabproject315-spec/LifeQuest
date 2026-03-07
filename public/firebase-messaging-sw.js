@@ -1,36 +1,28 @@
-// public/firebase-messaging-sw.js
-// Firebase Cloud Messaging Service Worker
-
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
-// ここの値はVercelの環境変数と同じものを設定
 firebase.initializeApp({
-  apiKey:            self.VITE_FIREBASE_API_KEY,
-  authDomain:        self.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId:         self.VITE_FIREBASE_PROJECT_ID,
-  storageBucket:     self.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: self.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId:             self.VITE_FIREBASE_APP_ID,
+  apiKey:            "AIzaSyCCPmI5_e_xkfK0d5DXo735SIOCzwa60_I",
+  authDomain:        "lifequest-9271d.firebaseapp.com",
+  projectId:         "lifequest-9271d",
+  storageBucket:     "lifequest-9271d.firebasestorage.app",
+  messagingSenderId: "181433868032",
+  appId:             "1:181433868032:web:ba16c9d0fe112648fe9de5",
 });
 
 const messaging = firebase.messaging();
 
-// バックグラウンドでの通知受信
 messaging.onBackgroundMessage((payload) => {
-  console.log('[SW] Background message:', payload);
-  const { title, body, icon } = payload.notification || {};
+  const { title, body } = payload.notification || {};
   self.registration.showNotification(title || '⚡ 新クエスト到着！', {
-    body: body || 'タップして確認！5分以内にクリアせよ！',
-    icon: icon || '/icon-192.png',
+    body: body || '5分以内にクリアせよ！',
+    icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'lifequest-quest',
     renotify: true,
-    data: payload.data,
   });
 });
 
-// 通知タップ → アプリを開く
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
