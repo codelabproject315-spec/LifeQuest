@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged }
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, onSnapshot } from 'firebase/firestore';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import {
-  Trophy, Camera, Home,
+  Trophy, Camera, Home, User,
   CheckCircle2, Loader2, MapPin, Zap, X, Mail, Lock,
   AlertCircle, Navigation,
   Sparkles, Users, Map, Award,
