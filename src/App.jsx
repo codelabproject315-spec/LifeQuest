@@ -922,6 +922,59 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
   );
 };
 
+// ── Admin ──────────────────────────────────────────────────
+const ADMIN_EMAIL = 'tataka1507@gmail.com';
+const NOTIFY_API_URL = import.meta.env.VITE_NOTIFY_API_URL || '';
+
+const AdminTab = ({ currentUser }) => {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const [title, setTitle] = useState('⚡ クエスト到着！');
+  const [body, setBody] = useState('新しいクエストが届いた！5分以内にクリアせよ！');
+
+  const sendNotification = async () => {
+    if (!NOTIFY_API_URL) { setResult({ ok: false, msg: 'API URLが未設定です' }); return; }
+    setSending(true); setResult(null);
+    try {
+      const res = await fetch(NOTIFY_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, body, force: true }),
+      });
+      const data = await res.json();
+      setResult({ ok: res.ok, msg: res.ok ? `✅ ${data.sent}人に送信完了！` : `❌ ${JSON.stringify(data)}` });
+    } catch (e) {
+      setResult({ ok: false, msg: `❌ ${e.message}` });
+    } finally { setSending(false); }
+  };
+
+  return (
+    <div className="px-4 py-6 space-y-4">
+      <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-4 text-white">
+        <p className="font-black text-lg">🛡️ 管理者パネル</p>
+        <p className="text-red-100 text-xs">{currentUser.email}</p>
+      </div>
+      <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <p className="font-black text-slate-700">📣 全ユーザーに通知を送信</p>
+        <div>
+          <label className="text-xs font-bold text-slate-500 block mb-1">タイトル</label>
+          <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-indigo-400" value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-500 block mb-1">メッセージ</label>
+          <textarea className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-indigo-400 resize-none" rows={3} value={body} onChange={e => setBody(e.target.value)} />
+        </div>
+        <button onClick={sendNotification} disabled={sending} className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-black py-3 rounded-xl disabled:opacity-50 active:scale-95 transition-transform">
+          {sending ? '送信中...' : '🚀 今すぐ全員に通知'}
+        </button>
+        {result && (
+          <div className={`text-sm font-bold p-3 rounded-xl ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{result.msg}</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ── Main App ───────────────────────────────────────────────
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
@@ -1048,6 +1101,7 @@ export default function App() {
   const gpsColor = { loading: 'bg-amber-100 text-amber-600', ok: 'bg-emerald-100 text-emerald-600', mock: 'bg-violet-100 text-violet-600' }[gpsStatus] || '';
   const maxXP = (currentUser.level || 1) * 200;
 
+  const isAdmin = currentUser.email === ADMIN_EMAIL;
   const tabs = [
     { key: 'home',   icon: <Home size={20} />,    label: 'ホーム' },
     { key: 'map',    icon: <Map size={20} />,      label: 'マップ' },
@@ -1132,6 +1186,7 @@ export default function App() {
         )}
         {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} />}
         {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} />}
+        {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} />}
       </main>
 
       {/* Nav */}
@@ -1151,6 +1206,12 @@ export default function App() {
             </button>
           );
         })}
+        {isAdmin && (
+          <button type="button" onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-0.5 p-2 transition-colors ${activeTab === 'admin' ? 'text-red-500' : 'text-slate-400'}`}>
+            <span className="text-xl">🛡️</span>
+            <span className="text-[9px] font-black uppercase tracking-tight">管理</span>
+          </button>
+        )}
       </nav>
     </div>
   );
