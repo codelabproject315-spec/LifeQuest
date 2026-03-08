@@ -986,6 +986,8 @@ export default function App() {
   const { location: userLocation, gpsStatus, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
+  const scheduleRef = useRef(schedule);
+  useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
   const [completedIds, setCompletedIds] = useState([]);
   const [quests, setQuests] = useState(() => getActiveQuests(getOrBuildSchedule(), []));
 
@@ -993,7 +995,7 @@ export default function App() {
   useEffect(() => {
     const tick = () => {
       const todayKey = new Date().toDateString();
-      let sched = schedule;
+      let sched = scheduleRef.current;
       // 日付変わったらスケジュール再生成
       try {
         const saved = localStorage.getItem(DAILY_QUEST_KEY);
@@ -1048,7 +1050,7 @@ export default function App() {
   // Service Workerからのメッセージ受信（通知タップ時）
   useEffect(() => {
     const handler = (event) => {
-      if (event.data?.type === 'FORCE_QUEST') {
+      if (event.data?.type === 'FORCE_QUEST' || event.data?.type === 'FORCE_QUEST_ALL') {
         forceShowNextQuest();
       }
     };
