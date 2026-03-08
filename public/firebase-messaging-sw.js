@@ -28,8 +28,16 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  // 常にURLパラメータ経由で開き直す（postMessageは確実性が低いため）
   event.waitUntil(
-    clients.openWindow('/?forceQuest=1')
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const appClient = clientList.find(c => c.url.includes(self.location.origin));
+      if (appClient) {
+        // アプリが開いている → localStorageにフラグを書いてポーリングに検知させる
+        appClient.postMessage({ type: 'FORCE_QUEST_ALL' });
+        return appClient.focus();
+      }
+      // アプリが閉じている → URLパラメータで開く
+      return clients.openWindow('/?forceQuest=1');
+    })
   );
 });
