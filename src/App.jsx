@@ -1241,15 +1241,6 @@ export default function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', handler);
   }, [forceShowNextQuest]);
 
-  // URLパラメータでアプリ起動した場合（バックグラウンドから通知タップ）
-  // URLパラメータ検知 → localStorageにフラグ保存（ログイン完了後に処理）
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('forceQuest') === '1' || params.get('forceQuestAll') === '1') {
-      try { localStorage.setItem('lifequest_force_quest', '1'); } catch {}
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
 
   useEffect(() => {
     const init = async () => {
