@@ -1130,6 +1130,7 @@ export default function App() {
 
   const completedIdsRef = useRef([]);
   const forceShowNextQuestRef = useRef(null);
+  const forceJustFiredRef = useRef(false); // force後にポーリングが上書きするのを防ぐフラグ
   useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
 
   const scheduleRef = useRef(schedule);
@@ -1162,27 +1163,43 @@ export default function App() {
           return;
         }
       } catch {}
-      setQuests(getActiveQuests(sched, completedIdsRef.current));
+      // force直後はポーリングによる上書きをスキップ
+      if (!forceJustFiredRef.current) {
+        setQuests(getActiveQuests(sched, completedIdsRef.current));
+      }
     };
     tick();
     const interval = setInterval(tick, 2000);
     return () => clearInterval(interval);
   }, []); // 依存配列を空にしてintervalを一度だけ生成
 
-  // クエストを強制的に表示する（未完了を全部アクティブ化・タイマーリセット）
+  // クエストを強制的に表示する（未完了のうち1個だけ追加アクティブ化・タイマーリセット）
   const forceShowNextQuest = useCallback(() => {
+    forceJustFiredRef.current = true;
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
-      // 未完了なら常にdeadlineをリセット（既にアクティブでも再延長する）
+      // 現在アクティブなクエストのタイマーをリセット（期限切れ防止）
+      // かつ未アクティブの未完了クエストを1個だけ新たに追加
+      let addedOne = false;
       const updated = prev.map(q => {
-        if (!completedIdsRef.current.includes(q.id)) {
+        if (completedIdsRef.current.includes(q.id)) return q;
+        const isActive = q.deliverAt <= now && q.deadlineTs > now;
+        if (isActive) {
+          // アクティブ中のものはタイマーだけリセット
+          return { ...q, deadlineTs: now + QUEST_DURATION };
+        }
+        // まだ出ていない or 期限切れ → 1個だけ追加
+        if (!addedOne) {
+          addedOne = true;
           return { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION };
         }
         return q;
       });
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      setTimeout(() => setQuests(getActiveQuests(updated, completedIdsRef.current)), 0);
+      scheduleRef.current = updated;
+      setQuests(getActiveQuests(updated, completedIdsRef.current));
+      setTimeout(() => { forceJustFiredRef.current = false; }, 3000);
       return updated;
     });
   }, [setQuests]);
