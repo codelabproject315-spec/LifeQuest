@@ -31,12 +31,13 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const appClient = clientList.find(c => c.url.includes(self.location.origin));
-      // 開いていても閉じていても常にURLパラメータ方式で統一
-      const targetUrl = self.location.origin + '/?forceQuestAll=1';
       if (appClient) {
-        return appClient.navigate(targetUrl).then(c => c.focus());
+        // アプリが開いている → リロードせずpostMessageでクエスト更新
+        appClient.postMessage({ type: 'FORCE_QUEST_ALL' });
+        return appClient.focus();
       }
-      return clients.openWindow(targetUrl);
+      // アプリが閉じている → URLパラメータ付きで起動（App.jsx起動時に検知）
+      return clients.openWindow('/?forceQuestAll=1');
     })
   );
 });
