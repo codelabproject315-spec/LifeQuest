@@ -801,55 +801,59 @@ const RANK_MIN_XP = { D: 3, C: 5, B: 8, A: 10, S: 6 };
 
 // ── AWS Rekognition 判定 ──────────────────────────────────────
 const REKOGNITION_LABELS = {
-  q_water:     { required: ['Cup', 'Bottle', 'Beverage', 'Drink', 'Water'] },
-  q_posture:   { required: ['Person', 'Chair'] },
-  q_photo:     { required: ['Sky', 'Cloud', 'Outdoors'] },
-  q_smile:     { required: ['Person'] }, // Face Detection で笑顔も検出
-  q_desk:      { required: ['Desk', 'Table', 'Furniture'] },
-  q_gratitude: { required: ['Text', 'Paper', 'Handwriting', 'Pen'] },
-  q_outside:   { required: ['Outdoors', 'Nature', 'Window', 'Sky'] },
-  q_music:     { required: ['Headphones', 'Earphone', 'Speaker'] },
-  q_hand:      { required: ['Sink', 'Hand', 'Soap'] },
-  q_stretch:   { required: ['Person', 'Exercise', 'Yoga', 'Stretching'] },
-  q_walk:      { required: ['Outdoors', 'Road', 'Path', 'Street'] },
-  q_note:      { required: ['Text', 'Paper', 'Notebook', 'Pen'] },
-  q_clean:     { required: ['Broom', 'Vacuum Cleaner', 'Mop', 'Cleaning'] },
-  q_veg:       { required: ['Vegetable', 'Salad', 'Food', 'Plant'] },
-  q_call:      { required: ['Phone', 'Screen', 'Text'] },
-  q_sketch:    { required: ['Drawing', 'Pen', 'Pencil', 'Paper', 'Art'] },
-  q_news:      { required: ['Screen', 'Text', 'Newspaper', 'Book'] },
-  q_cook:      { required: ['Food', 'Cooking', 'Pan', 'Kitchen', 'Meal'] },
-  q_plant:     { required: ['Plant', 'Flower', 'Potted Plant'] },
-  q_compliment:{ required: [] }, // 自己申告
-  q_study:     { required: ['Book', 'Text', 'Reading', 'Notebook'] },
-  q_read:      { required: ['Book', 'Text', 'Reading'] },
-  q_run:       { required: ['Person', 'Running', 'Jogging', 'Road', 'Outdoors'] },
-  q_new:       { required: ['Outdoors', 'Street', 'Road', 'Path'] },
-  q_cook2:     { required: ['Food', 'Cooking', 'Pan', 'Kitchen', 'Meal'] },
-  q_help:      { required: [] }, // 自己申告
-  q_plan:      { required: ['Text', 'Paper', 'Notebook', 'Pen'] },
-  q_digital:   { required: [] }, // 自己申告
-  q_photo2:    { required: ['Outdoors', 'Architecture', 'Nature', 'Art'] },
-  q_talk:      { required: ['Person'] },
-  q_morning:   { required: ['Sky', 'Sunrise', 'Sunlight', 'Outdoors'] },
-  q_exercise:  { required: ['Exercise', 'Sport', 'Gym', 'Dumbbell', 'Person'] },
-  q_learn:     { required: ['Book', 'Text', 'Screen', 'Notebook'] },
-  q_stranger:  { required: ['Person'] },
-  q_create:    { required: ['Drawing', 'Art', 'Paper', 'Pen', 'Music'] },
-  q_fast:      { required: [] }, // 自己申告
-  q_mentor:    { required: ['Person'] },
-  q_explore:   { required: ['Outdoors', 'Building', 'Street', 'Road'] },
-  q_urgent1:   { required: [] }, // 自己申告
-  q_urgent2:   { required: ['Trash', 'Garbage', 'Bag', 'Box', 'Waste'] },
-  q_urgent3:   { required: ['Phone', 'Screen', 'Text'] },
-  q_sunrise:   { required: ['Sky', 'Sunrise', 'Sunlight', 'Outdoors'] },
-  q_cold:      { required: ['Shower', 'Bathroom', 'Water', 'Sink'] },
-  q_nophone:   { required: [] }, // 自己申告
-  q_volunteer: { required: ['Person'] },
-  q_lib:       { required: ['Book', 'Library', 'Building', 'Shelf'] },
+  q_water:     { required: ['Cup', 'Bottle', 'Beverage', 'Drink', 'Water'],           hint: 'コップや飲み物を撮ってください' },
+  q_posture:   { required: ['Person', 'Chair'],                                        hint: '椅子に座っている自分を撮ってください' },
+  q_photo:     { required: ['Sky', 'Cloud', 'Outdoors'],                               hint: '空や雲を撮ってください' },
+  q_smile:     { required: ['Person'],                                                  hint: '鏡に映った笑顔の自分を撮ってください' },
+  q_desk:      { required: ['Desk', 'Table', 'Furniture'],                             hint: '整理した机やテーブルを撮ってください' },
+  q_gratitude: { required: ['Text', 'Paper', 'Handwriting', 'Pen'],                   hint: '感謝を書いたメモや手帳を撮ってください' },
+  q_outside:   { required: ['Outdoors', 'Nature', 'Window', 'Sky'],                   hint: '窓の外の景色や自然を撮ってください' },
+  q_music:     { required: ['Headphones', 'Earphone', 'Speaker'],                     hint: 'イヤホン・ヘッドホン・スピーカーを撮ってください' },
+  q_hand:      { required: ['Sink', 'Hand', 'Soap'],                                  hint: '手洗い中の手や洗面台を撮ってください' },
+  q_stretch:   { required: ['Person', 'Exercise', 'Yoga', 'Stretching'],              hint: 'ストレッチしている自分を撮ってください' },
+  q_walk:      { required: ['Outdoors', 'Road', 'Path', 'Street'],                    hint: '歩いている道や外の景色を撮ってください' },
+  q_note:      { required: ['Text', 'Paper', 'Notebook', 'Pen'],                      hint: '書いたメモやノートを撮ってください' },
+  q_clean:     { required: ['Broom', 'Vacuum Cleaner', 'Mop', 'Cleaning'],            hint: 'ほうきや掃除機など掃除道具を撮ってください' },
+  q_veg:       { required: ['Vegetable', 'Salad', 'Food', 'Plant'],                   hint: '野菜が入った食事を撮ってください' },
+  q_call:      { required: ['Phone', 'Screen', 'Text'],                               hint: 'メッセージ画面やスマホを撮ってください' },
+  q_sketch:    { required: ['Drawing', 'Pen', 'Pencil', 'Paper', 'Art'],              hint: '描いた絵や落書きを撮ってください' },
+  q_news:      { required: ['Screen', 'Text', 'Newspaper', 'Book'],                   hint: '読んでいる記事の画面や新聞を撮ってください' },
+  q_cook:      { required: ['Food', 'Cooking', 'Pan', 'Kitchen', 'Meal'],             hint: '作った料理やキッチンを撮ってください' },
+  q_plant:     { required: ['Plant', 'Flower', 'Potted Plant'],                       hint: '水をあげた植物や花を撮ってください' },
+  q_compliment:{ required: [],                                                          hint: '完了ボタンを押してください' },
+  q_study:     { required: ['Book', 'Text', 'Reading', 'Notebook'],                   hint: '勉強中のノートや教材を撮ってください' },
+  q_read:      { required: ['Book', 'Text', 'Reading'],                               hint: '読んでいる本や記事を撮ってください' },
+  q_run:       { required: ['Person', 'Running', 'Jogging', 'Road', 'Outdoors'],      hint: 'ジョギング中の道や自分を撮ってください' },
+  q_new:       { required: ['Outdoors', 'Street', 'Road', 'Path'],                    hint: '歩いている新しいルートの道を撮ってください' },
+  q_cook2:     { required: ['Food', 'Cooking', 'Pan', 'Kitchen', 'Meal'],             hint: '挑戦した新メニューを撮ってください' },
+  q_help:      { required: [],                                                          hint: '完了ボタンを押してください' },
+  q_plan:      { required: ['Text', 'Paper', 'Notebook', 'Pen'],                      hint: '書いた明日の計画リストを撮ってください' },
+  q_digital:   { required: [],                                                          hint: '完了ボタンを押してください' },
+  q_photo2:    { required: ['Outdoors', 'Architecture', 'Nature', 'Art'],              hint: '美しいと感じたものを撮ってください' },
+  q_talk:      { required: ['Person'],                                                  hint: '話し相手と一緒に写った写真を撮ってください' },
+  q_morning:   { required: ['Sky', 'Sunrise', 'Sunlight', 'Outdoors'],                hint: '朝日や朝の空を撮ってください' },
+  q_exercise:  { required: ['Exercise', 'Sport', 'Gym', 'Dumbbell', 'Person'],        hint: '運動・筋トレしている自分や器具を撮ってください' },
+  q_learn:     { required: ['Book', 'Text', 'Screen', 'Notebook'],                    hint: '学習中の画面やノートを撮ってください' },
+  q_stranger:  { required: ['Person'],                                                  hint: '話しかけた人と一緒に写った写真を撮ってください' },
+  q_create:    { required: ['Drawing', 'Art', 'Paper', 'Pen', 'Music'],               hint: '完成した作品（絵・文・楽器など）を撮ってください' },
+  q_fast:      { required: [],                                                          hint: '完了ボタンを押してください' },
+  q_mentor:    { required: ['Person'],                                                  hint: '教えている様子や相手と一緒に写った写真を撮ってください' },
+  q_explore:   { required: ['Outdoors', 'Building', 'Street', 'Road'],                hint: '行ったことのない場所の景色を撮ってください' },
+  q_urgent1:   { required: [],                                                          hint: '完了ボタンを押してください' },
+  q_urgent2:   { required: ['Trash', 'Garbage', 'Bag', 'Box', 'Waste'],               hint: '捨てるものやゴミ袋を撮ってください' },
+  q_urgent3:   { required: ['Phone', 'Screen', 'Text'],                               hint: '送った感謝メッセージの画面を撮ってください' },
+  q_sunrise:   { required: ['Sky', 'Sunrise', 'Sunlight', 'Outdoors'],                hint: '日の出や朝焼けの空を撮ってください' },
+  q_cold:      { required: ['Shower', 'Bathroom', 'Water', 'Sink'],                   hint: 'シャワーや浴室を撮ってください' },
+  q_nophone:   { required: [],                                                          hint: '完了ボタンを押してください' },
+  q_volunteer: { required: ['Person'],                                                  hint: 'ボランティア活動の様子を撮ってください' },
+  q_lib:       { required: ['Book', 'Library', 'Building', 'Shelf'],                  hint: '図書館の建物や本棚を撮ってください' },
 };
 
 const judgePhotoWithRekognition = async (questId, imageBase64) => {
+  // 自己申告クエストはRekognition呼ばず即承認
+  if (SELF_REPORT_QUESTS.has(questId)) {
+    return { approved: true, message: '自己申告で承認', xpBonus: 0, selfReport: true };
+  }
   try {
     const REGION = import.meta.env.VITE_AWS_REGION || 'ap-northeast-1';
     const ACCESS_KEY = import.meta.env.VITE_AWS_ACCESS_KEY_ID || '';
@@ -933,10 +937,9 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
   const isSelfReport = SELF_REPORT_QUESTS.has(quest.id);
 
   const handleSelfReport = () => {
-    const awardXP = Math.round((RANK_MIN_XP[quest.rank] || 3) * rank.xpMult);
     setJudgeResult({ approved: true, message: '自己申告で承認', xpBonus: 0 });
     setStatus('approved');
-    setTimeout(() => onComplete(awardXP), 1200);
+    setTimeout(() => onComplete(1), 1200);
   };
 
   const handleCapture = async (imageBase64) => {
@@ -1032,6 +1035,12 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
         </div>
       )}
 
+      {status === 'idle' && (() => {
+        const hint = REKOGNITION_LABELS[quest.id]?.hint;
+        return hint ? (
+          <p className="text-xs text-slate-400 font-bold text-center mb-2 bg-slate-50 rounded-xl px-3 py-2">📷 {hint}</p>
+        ) : null;
+      })()}
       {status === 'idle' && isSelfReport && <button type="button" onClick={handleSelfReport} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all text-sm shadow-sm ${quest.isUrgent ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}><CheckCircle2 size={16} />完了する</button>}
       {status === 'idle' && !isSelfReport && <button type="button" onClick={() => setIsCameraOpen(true)} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all text-sm shadow-sm ${quest.isUrgent ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}><Camera size={16} />カメラで証明</button>}
       {status === 'uploading' && <div className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold flex items-center justify-center gap-2 text-sm"><Loader2 className="animate-spin" size={16} />AI判定中...</div>}
@@ -1150,32 +1159,33 @@ export default function App() {
     return () => clearInterval(interval);
   }, []); // 依存配列を空にしてintervalを一度だけ生成
 
-  // クエストを強制的に1つ表示する
+  // クエストを強制的に表示する（未完了・未配信を全部アクティブにする）
   const forceShowNextQuest = useCallback(() => {
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
-      // 未完了 & まだアクティブでない（deadlineTs未設定 or 期限切れ）クエストを強制表示
-      const nextIndex = prev.findIndex(q =>
+      // 未完了 かつ まだアクティブでないクエストを全て強制表示
+      const hasUpdate = prev.some(q =>
         !completedIdsRef.current.includes(q.id) &&
         (q.deliverAt > now || q.deadlineTs < now)
       );
-      if (nextIndex === -1) return prev;
-      const updated = prev.map((q, i) =>
-        i === nextIndex
-          ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
-          : q
-      );
+      if (!hasUpdate) return prev;
+      const updated = prev.map(q => {
+        if (!completedIdsRef.current.includes(q.id) &&
+            (q.deliverAt > now || q.deadlineTs < now)) {
+          return { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION };
+        }
+        return q;
+      });
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
       setTimeout(() => setQuests(getActiveQuests(updated, completedIdsRef.current)), 0);
       return updated;
     });
   }, [setQuests]);
 
-  // フォアグラウンド通知受信 → クエスト強制表示
+  // フォアグラウンド通知受信 → クエスト強制表示（バナーはSWが出すのでここでは出さない）
   useEffect(() => {
-    const unsub = onMessage(messaging, (payload) => {
-      showNotification('quest', { title: payload.notification?.title, body: payload.notification?.body });
+    const unsub = onMessage(messaging, () => {
       forceShowNextQuest();
     });
     return unsub;
@@ -1192,12 +1202,11 @@ export default function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', handler);
   }, [forceShowNextQuest]);
 
-  // URLパラメータ?forceQuest=1でアプリ起動した場合（バックグラウンドから通知タップ）
+  // URLパラメータでアプリ起動した場合（バックグラウンドから通知タップ）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('forceQuest') === '1') {
+    if (params.get('forceQuest') === '1' || params.get('forceQuestAll') === '1') {
       forceShowNextQuest();
-      // URLパラメータを消す
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [forceShowNextQuest]);
