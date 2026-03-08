@@ -1194,10 +1194,22 @@ export default function App() {
   }, [setQuests]);
   forceShowNextQuestRef.current = forceShowNextQuest;
 
-  // フォアグラウンド通知受信 → クエスト強制表示（バナーはSWが出すのでここでは出さない）
+  // フォアグラウンド通知受信 → クエスト強制表示 + 手動でバナー表示（SWはフォアグラウンド時に発火しないため）
   useEffect(() => {
-    const unsub = onMessage(messaging, () => {
+    const unsub = onMessage(messaging, (payload) => {
       forceShowNextQuest();
+      const { title, body } = payload.notification || {};
+      if (Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(title || '⚡ クエスト到着！', {
+            body: body || '新しいクエストが届いた！5分以内にクリアせよ！',
+            icon: '/icon-192.png',
+            tag: 'lifequest-quest',
+            renotify: true,
+            requireInteraction: true,
+          });
+        });
+      }
     });
     return unsub;
   }, [forceShowNextQuest]);
