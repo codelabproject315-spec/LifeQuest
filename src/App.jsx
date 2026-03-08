@@ -1209,10 +1209,9 @@ export default function App() {
   }, [setQuests]);
   forceShowNextQuestRef.current = forceShowNextQuest;
 
-  // フォアグラウンド通知受信 → クエスト強制表示 + 手動でバナー表示（SWはフォアグラウンド時に発火しないため）
+  // フォアグラウンド通知受信 → バナー表示のみ（クエスト更新は通知タップのpostMessage側で行う）
   useEffect(() => {
     const unsub = onMessage(messaging, (payload) => {
-      forceShowNextQuest();
       const { title, body } = payload.notification || {};
       if (Notification.permission === 'granted') {
         navigator.serviceWorker.ready.then(reg => {
