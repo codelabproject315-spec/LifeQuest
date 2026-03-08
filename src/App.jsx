@@ -986,7 +986,17 @@ export default function App() {
   const { location: userLocation, gpsStatus, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
-  const [completedIds, setCompletedIds] = useState([]);
+  const COMPLETED_KEY = 'lifequest_completed_v1';
+  const [completedIds, setCompletedIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lifequest_completed_v1');
+      if (saved) {
+        const { dateKey, ids } = JSON.parse(saved);
+        if (dateKey === new Date().toDateString()) return ids;
+      }
+    } catch {}
+    return [];
+  });
   const [quests, setQuests] = useState(() => getActiveQuests(getOrBuildSchedule(), []));
 
   const completedIdsRef = useRef([]);
@@ -1131,7 +1141,13 @@ export default function App() {
     }
 
     await saveUser(updated);
-    setCompletedIds(prev => [...prev, questId]);
+    setCompletedIds(prev => {
+      const next = [...prev, questId];
+      try {
+        localStorage.setItem(COMPLETED_KEY, JSON.stringify({ dateKey: new Date().toDateString(), ids: next }));
+      } catch {}
+      return next;
+    });
   };
 
   const handleLoginSuccess = user => {
