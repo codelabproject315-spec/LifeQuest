@@ -14,10 +14,12 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
-  // 起動中のアプリにクエスト更新を通知
-  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-    clientList.forEach(client => client.postMessage({ type: 'FORCE_QUEST_ALL' }));
-  });
+  // FirestoreにforceQuestフラグを書き込む（ポーリングが検知してクエスト更新）
+  fetch('https://firestore.googleapis.com/v1/projects/lifequest-9271d/databases/(default)/documents/artifacts/lifequest/public/data?documentId=forceQuest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { active: { booleanValue: true }, timestamp: { integerValue: Date.now() } } }),
+  }).catch(() => {});
   return self.registration.showNotification(title || '⚡ 新クエスト到着！', {
     body: body || '5分以内にクリアせよ！',
     icon: '/icon-192.png',
