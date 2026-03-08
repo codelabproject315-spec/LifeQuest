@@ -29,10 +29,11 @@ self.addEventListener('notificationclick', (event) => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({ type: 'FORCE_QUEST' });
           return client.focus();
         }
       }
-      return clients.openWindow('/');
+      return clients.openWindow('/?forceQuest=1');
     })
   );
 });
