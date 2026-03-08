@@ -993,16 +993,13 @@ export default function App() {
   useEffect(() => {
     const tick = () => {
       const todayKey = new Date().toDateString();
-      // 常にlocalStorageから最新スケジュールを読む（forceShow後の上書きを防ぐ）
-      let sched = null;
+      let sched = schedule;
+      // 日付変わったらスケジュール再生成
       try {
         const saved = localStorage.getItem(DAILY_QUEST_KEY);
         if (saved) {
-          const { dateKey, schedule: savedSched } = JSON.parse(saved);
-          if (dateKey === todayKey) {
-            sched = savedSched;
-          } else {
-            // 日付変わったらスケジュール再生成
+          const { dateKey } = JSON.parse(saved);
+          if (dateKey !== todayKey) {
             sched = buildDailySchedule();
             localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: todayKey, schedule: sched }));
             setSchedule(sched);
@@ -1010,7 +1007,6 @@ export default function App() {
           }
         }
       } catch {}
-      if (!sched) sched = schedule;
       setQuests(getActiveQuests(sched, completedIds));
     };
     tick();
@@ -1018,84 +1014,57 @@ export default function App() {
     return () => clearInterval(interval);
   }, [schedule, completedIds]);
 
-  // クエストを強制的に1つ表示する（deliverAtを現在時刻に上書き）
+  // クエストを強制的に1つ表示する
   const forceShowNextQuest = useCallback(() => {
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
-      // まだ未配信のクエストの中で最初のものを強制表示
-      const nextIndex = prev.findIndex(q => q.deliverAt > now);
-      if (nextIndex === -1) return prev; // 全部配信済み
+      // 未完了 & まだアクティブでない（deadlineTs未設定 or 期限切れ）クエストを強制表示
+      const nextIndex = prev.findIndex(q =>
+        !completedIds.includes(q.id) &&
+        (q.deliverAt > now || q.deadlineTs < now)
+      );
+      if (nextIndex === -1) return prev;
       const updated = prev.map((q, i) =>
         i === nextIndex
           ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
           : q
       );
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      // 即時反映
-      setTimeout(() => setQuests(getActiveQuests(updated, [])), 0);
+      setTimeout(() => setQuests(getActiveQuests(updated, completedIds)), 0);
       return updated;
     });
-  }, [setQuests]);
-
-  // 管理者通知用：未配信クエストを全件まとめて強制表示する
-  const forceShowAllQuests = useCallback(() => {
-    const now = Date.now();
-    const QUEST_DURATION = 5 * 60 * 1000;
-    setSchedule(prev => {
-      const updated = prev.map(q =>
-        q.deliverAt > now
-          ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
-          : q
-      );
-      try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      // setSchedule更新後にsetQuestsも更新（completedIdsはuseCallbackの外から参照できないためsetQuests側で対応）
-      setTimeout(() => {
-        setQuests(getActiveQuests(updated, []));
-      }, 0);
-      return updated;
-    });
-  }, [setQuests]);
+  }, [setQuests, completedIds]);
 
   // フォアグラウンド通知受信 → クエスト強制表示
   useEffect(() => {
     const unsub = onMessage(messaging, (payload) => {
       showNotification('quest', { title: payload.notification?.title, body: payload.notification?.body });
-      // 管理者からの強制通知（force: true）の場合は全クエストを一括表示
-      if (payload.data?.force === 'true' || payload.data?.force === true) {
-        forceShowAllQuests();
-      } else {
-        forceShowNextQuest();
-      }
+      forceShowNextQuest();
     });
     return unsub;
-  }, [forceShowNextQuest, forceShowAllQuests]);
+  }, [forceShowNextQuest]);
 
   // Service Workerからのメッセージ受信（通知タップ時）
   useEffect(() => {
     const handler = (event) => {
-      if (event.data?.type === 'FORCE_QUEST_ALL') {
-        forceShowAllQuests();
-      } else if (event.data?.type === 'FORCE_QUEST') {
+      if (event.data?.type === 'FORCE_QUEST') {
         forceShowNextQuest();
       }
     };
     navigator.serviceWorker?.addEventListener('message', handler);
     return () => navigator.serviceWorker?.removeEventListener('message', handler);
-  }, [forceShowNextQuest, forceShowAllQuests]);
+  }, [forceShowNextQuest]);
 
   // URLパラメータ?forceQuest=1でアプリ起動した場合（バックグラウンドから通知タップ）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('forceQuestAll') === '1') {
-      forceShowAllQuests();
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (params.get('forceQuest') === '1') {
+    if (params.get('forceQuest') === '1') {
       forceShowNextQuest();
       // URLパラメータを消す
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [forceShowNextQuest, forceShowAllQuests]);
+  }, [forceShowNextQuest]);
 
   useEffect(() => {
     const init = async () => {
