@@ -1138,7 +1138,13 @@ export default function App() {
   useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
 
   const scheduleRef = useRef(schedule);
-  useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
+  // scheduleが変わったら即座にquestsも更新
+  useEffect(() => {
+    scheduleRef.current = schedule;
+    if (forceJustFiredRef.current) {
+      setQuests(getActiveQuests(schedule, completedIdsRef.current));
+    }
+  }, [schedule]);
 
   // 毎2秒: クエスト表示更新 & SWからのフラグ監視 & 日付リセット
   useEffect(() => {
@@ -1183,17 +1189,13 @@ export default function App() {
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
-      // 現在アクティブなクエストのタイマーをリセット（期限切れ防止）
-      // かつ未アクティブの未完了クエストを1個だけ新たに追加
       let addedOne = false;
       const updated = prev.map(q => {
         if (completedIdsRef.current.includes(q.id)) return q;
         const isActive = q.deliverAt <= now && q.deadlineTs > now;
         if (isActive) {
-          // アクティブ中のものはタイマーだけリセット
           return { ...q, deadlineTs: now + QUEST_DURATION };
         }
-        // まだ出ていない or 期限切れ → 1個だけ追加
         if (!addedOne) {
           addedOne = true;
           return { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION };
@@ -1201,17 +1203,16 @@ export default function App() {
         return q;
       });
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      scheduleRef.current = updated;
-      setQuests(getActiveQuests(updated, completedIdsRef.current));
       setTimeout(() => { forceJustFiredRef.current = false; }, 3000);
       return updated;
     });
-  }, [setQuests]);
+  }, []);
   forceShowNextQuestRef.current = forceShowNextQuest;
 
-  // フォアグラウンド通知受信 → バナー表示のみ（クエスト更新は通知タップのpostMessage側で行う）
+  // フォアグラウンド通知受信 → クエスト更新 + 手動バナー表示
   useEffect(() => {
     const unsub = onMessage(messaging, (payload) => {
+      forceShowNextQuest();
       const { title, body } = payload.notification || {};
       if (Notification.permission === 'granted') {
         navigator.serviceWorker.ready.then(reg => {
@@ -1260,6 +1261,13 @@ export default function App() {
       setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return unsub;
+  }, [currentUser?.id]);
+
+  // アプリ起動のたびにFCMトークンを更新（トークン期限切れ対策）
+  useEffect(() => {
+    if (currentUser?.id) {
+      registerPushToken(currentUser.id);
+    }
   }, [currentUser?.id]);
 
   const showNotification = (type, data) => {
