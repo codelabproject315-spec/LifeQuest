@@ -15,10 +15,10 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
   // FirestoreにforceQuestフラグを書き込む（ポーリングが検知してクエスト更新）
-  fetch('https://firestore.googleapis.com/v1/projects/lifequest-9271d/databases/(default)/documents/artifacts/lifequest/public/data?documentId=forceQuest', {
-    method: 'POST',
+  fetch('https://firestore.googleapis.com/v1/projects/lifequest-9271d/databases/(default)/documents/artifacts/lifequest/public/data?updateMask.fieldPaths=forceQuest', {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { active: { booleanValue: true }, timestamp: { integerValue: Date.now() } } }),
+    body: JSON.stringify({ fields: { forceQuest: { booleanValue: true } } }),
   }).catch(() => {});
   return self.registration.showNotification(title || '⚡ 新クエスト到着！', {
     body: body || '5分以内にクリアせよ！',
