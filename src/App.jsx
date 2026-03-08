@@ -32,8 +32,12 @@ const registerPushToken = async (userId) => {
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return;
+    // SWを明示的に / スコープで登録（これをしないとバナーが出ない）
+    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
     const token = await getToken(messaging, {
       vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: swReg,
     });
     if (token) {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId), {
