@@ -1014,13 +1014,55 @@ export default function App() {
     return () => clearInterval(interval);
   }, [schedule, completedIds]);
 
-  // フォアグラウンド通知受信
+  // クエストを強制的に1つ表示する（deliverAtを現在時刻に上書き）
+  const forceShowNextQuest = useCallback(() => {
+    setSchedule(prev => {
+      const now = Date.now();
+      const QUEST_DURATION = 5 * 60 * 1000;
+      // まだ未配信のクエストの中で最初のものを強制表示
+      const nextIndex = prev.findIndex(q => q.deliverAt > now);
+      if (nextIndex === -1) return prev; // 全部配信済み
+      const updated = prev.map((q, i) =>
+        i === nextIndex
+          ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
+          : q
+      );
+      try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
+      // 即時反映
+      setTimeout(() => setQuests(getActiveQuests(updated, [])), 0);
+      return updated;
+    });
+  }, [setQuests]);
+
+  // フォアグラウンド通知受信 → クエスト強制表示
   useEffect(() => {
     const unsub = onMessage(messaging, (payload) => {
       showNotification('quest', { title: payload.notification?.title, body: payload.notification?.body });
+      forceShowNextQuest();
     });
     return unsub;
-  }, []);
+  }, [forceShowNextQuest]);
+
+  // Service Workerからのメッセージ受信（通知タップ時）
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.data?.type === 'FORCE_QUEST') {
+        forceShowNextQuest();
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', handler);
+    return () => navigator.serviceWorker?.removeEventListener('message', handler);
+  }, [forceShowNextQuest]);
+
+  // URLパラメータ?forceQuest=1でアプリ起動した場合（バックグラウンドから通知タップ）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('forceQuest') === '1') {
+      forceShowNextQuest();
+      // URLパラメータを消す
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [forceShowNextQuest]);
 
   useEffect(() => {
     const init = async () => {
