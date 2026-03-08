@@ -12,37 +12,24 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 最後に受信した通知のforceフラグを記憶する
-let lastPayloadForce = false;
-
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
-  // 管理者通知かどうか記録
-  lastPayloadForce = payload.data?.force === 'true' || payload.data?.force === true;
-  self.registration.showNotification(title || '⚡ 新クエスト到着！', {
+  const isForce = payload.data?.force === 'true';
+  return self.registration.showNotification(title || '⚡ 新クエスト到着！', {
     body: body || '5分以内にクリアせよ！',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'lifequest-quest',
     renotify: true,
-    data: { force: lastPayloadForce },
+    requireInteraction: true,
+    data: { force: isForce },
   });
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const isForceAll = event.notification.data?.force === true;
+  // 常にURLパラメータ経由で開き直す（postMessageは確実性が低いため）
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          // 管理者通知なら全クエスト表示、通常なら1個
-          client.postMessage({ type: isForceAll ? 'FORCE_QUEST_ALL' : 'FORCE_QUEST' });
-          return client.focus();
-        }
-      }
-      // アプリが閉じている場合はURLパラメータで区別
-      return clients.openWindow(isForceAll ? '/?forceQuestAll=1' : '/?forceQuest=1');
-    })
+    clients.openWindow('/?forceQuest=1')
   );
 });
