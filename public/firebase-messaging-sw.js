@@ -12,21 +12,37 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 最後に受信した通知のforceフラグを記憶する
-let lastPayloadForce = false;
-
-messaging.onBackgroundMessage((payload) => {
-  const { title, body } = payload.notification || {};
-  // 管理者通知かどうか記録
-  lastPayloadForce = payload.data?.force === 'true' || payload.data?.force === true;
+const showQuestNotification = (title, body, isForce) => {
   self.registration.showNotification(title || '⚡ 新クエスト到着！', {
     body: body || '5分以内にクリアせよ！',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'lifequest-quest',
     renotify: true,
-    data: { force: lastPayloadForce },
+    requireInteraction: true,
+    data: { force: isForce },
   });
+};
+
+// バックグラウンド時
+messaging.onBackgroundMessage((payload) => {
+  const { title, body } = payload.notification || {};
+  const isForce = payload.data?.force === 'true';
+  showQuestNotification(title, body, isForce);
+});
+
+// フォアグラウンド時（アプリが開いている状態でも通知バナーを出す）
+self.addEventListener('push', (event) => {
+  let title = '⚡ 新クエスト到着！';
+  let body = '5分以内にクリアせよ！';
+  let isForce = false;
+  try {
+    const data = event.data?.json();
+    title = data?.notification?.title || title;
+    body = data?.notification?.body || body;
+    isForce = data?.data?.force === 'true';
+  } catch {}
+  event.waitUntil(showQuestNotification(title, body, isForce));
 });
 
 self.addEventListener('notificationclick', (event) => {
