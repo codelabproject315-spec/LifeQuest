@@ -1034,35 +1034,62 @@ export default function App() {
     });
   }, [setQuests]);
 
+  // 管理者通知用：未配信クエストを全件まとめて強制表示する
+  const forceShowAllQuests = useCallback(() => {
+    setSchedule(prev => {
+      const now = Date.now();
+      const QUEST_DURATION = 5 * 60 * 1000;
+      // 未配信（deliverAt > now）のクエストを全部まとめて今すぐ表示
+      const updated = prev.map(q =>
+        q.deliverAt > now
+          ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
+          : q
+      );
+      try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
+      setTimeout(() => setQuests(getActiveQuests(updated, [])), 0);
+      return updated;
+    });
+  }, [setQuests]);
+
   // フォアグラウンド通知受信 → クエスト強制表示
   useEffect(() => {
     const unsub = onMessage(messaging, (payload) => {
       showNotification('quest', { title: payload.notification?.title, body: payload.notification?.body });
-      forceShowNextQuest();
+      // 管理者からの強制通知（force: true）の場合は全クエストを一括表示
+      if (payload.data?.force === 'true' || payload.data?.force === true) {
+        forceShowAllQuests();
+      } else {
+        forceShowNextQuest();
+      }
     });
     return unsub;
-  }, [forceShowNextQuest]);
+  }, [forceShowNextQuest, forceShowAllQuests]);
 
   // Service Workerからのメッセージ受信（通知タップ時）
   useEffect(() => {
     const handler = (event) => {
-      if (event.data?.type === 'FORCE_QUEST') {
+      if (event.data?.type === 'FORCE_QUEST_ALL') {
+        forceShowAllQuests();
+      } else if (event.data?.type === 'FORCE_QUEST') {
         forceShowNextQuest();
       }
     };
     navigator.serviceWorker?.addEventListener('message', handler);
     return () => navigator.serviceWorker?.removeEventListener('message', handler);
-  }, [forceShowNextQuest]);
+  }, [forceShowNextQuest, forceShowAllQuests]);
 
   // URLパラメータ?forceQuest=1でアプリ起動した場合（バックグラウンドから通知タップ）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('forceQuest') === '1') {
+    if (params.get('forceQuestAll') === '1') {
+      forceShowAllQuests();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('forceQuest') === '1') {
       forceShowNextQuest();
       // URLパラメータを消す
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [forceShowNextQuest]);
+  }, [forceShowNextQuest, forceShowAllQuests]);
 
   useEffect(() => {
     const init = async () => {
