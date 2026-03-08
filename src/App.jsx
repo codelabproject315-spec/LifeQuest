@@ -986,10 +986,14 @@ export default function App() {
   const { location: userLocation, gpsStatus, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
-  const scheduleRef = useRef(schedule);
-  useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
   const [completedIds, setCompletedIds] = useState([]);
   const [quests, setQuests] = useState(() => getActiveQuests(getOrBuildSchedule(), []));
+
+  const completedIdsRef = useRef([]);
+  useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
+
+  const scheduleRef = useRef(schedule);
+  useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
 
   // 毎10秒: 新たに deliverAt を迎えたクエストを表示 & 期限切れを削除 & 日付リセット
   useEffect(() => {
@@ -1009,12 +1013,12 @@ export default function App() {
           }
         }
       } catch {}
-      setQuests(getActiveQuests(sched, completedIds));
+      setQuests(getActiveQuests(sched, completedIdsRef.current));
     };
     tick();
     const interval = setInterval(tick, 10000);
     return () => clearInterval(interval);
-  }, [schedule, completedIds]);
+  }, []); // 依存配列を空にしてintervalを一度だけ生成
 
   // クエストを強制的に1つ表示する
   const forceShowNextQuest = useCallback(() => {
@@ -1023,7 +1027,7 @@ export default function App() {
       const QUEST_DURATION = 5 * 60 * 1000;
       // 未完了 & まだアクティブでない（deadlineTs未設定 or 期限切れ）クエストを強制表示
       const nextIndex = prev.findIndex(q =>
-        !completedIds.includes(q.id) &&
+        !completedIdsRef.current.includes(q.id) &&
         (q.deliverAt > now || q.deadlineTs < now)
       );
       if (nextIndex === -1) return prev;
@@ -1033,10 +1037,10 @@ export default function App() {
           : q
       );
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      setTimeout(() => setQuests(getActiveQuests(updated, completedIds)), 0);
+      setTimeout(() => setQuests(getActiveQuests(updated, completedIdsRef.current)), 0);
       return updated;
     });
-  }, [setQuests, completedIds]);
+  }, [setQuests]);
 
   // フォアグラウンド通知受信 → クエスト強制表示
   useEffect(() => {
