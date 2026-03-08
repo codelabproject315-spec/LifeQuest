@@ -1200,12 +1200,11 @@ export default function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', handler);
   }, [forceShowNextQuest]);
 
-  // URLパラメータ?forceQuest=1でアプリ起動した場合（バックグラウンドから通知タップ）
+  // URLパラメータでアプリ起動した場合（バックグラウンドから通知タップ）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('forceQuest') === '1') {
+    if (params.get('forceQuest') === '1' || params.get('forceQuestAll') === '1') {
       forceShowNextQuest();
-      // URLパラメータを消す
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [forceShowNextQuest]);
