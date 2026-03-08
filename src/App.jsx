@@ -993,13 +993,16 @@ export default function App() {
   useEffect(() => {
     const tick = () => {
       const todayKey = new Date().toDateString();
-      let sched = schedule;
-      // 日付変わったらスケジュール再生成
+      // 常にlocalStorageから最新スケジュールを読む（forceShow後の上書きを防ぐ）
+      let sched = null;
       try {
         const saved = localStorage.getItem(DAILY_QUEST_KEY);
         if (saved) {
-          const { dateKey } = JSON.parse(saved);
-          if (dateKey !== todayKey) {
+          const { dateKey, schedule: savedSched } = JSON.parse(saved);
+          if (dateKey === todayKey) {
+            sched = savedSched;
+          } else {
+            // 日付変わったらスケジュール再生成
             sched = buildDailySchedule();
             localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: todayKey, schedule: sched }));
             setSchedule(sched);
@@ -1007,6 +1010,7 @@ export default function App() {
           }
         }
       } catch {}
+      if (!sched) sched = schedule;
       setQuests(getActiveQuests(sched, completedIds));
     };
     tick();
@@ -1036,17 +1040,19 @@ export default function App() {
 
   // 管理者通知用：未配信クエストを全件まとめて強制表示する
   const forceShowAllQuests = useCallback(() => {
+    const now = Date.now();
+    const QUEST_DURATION = 5 * 60 * 1000;
     setSchedule(prev => {
-      const now = Date.now();
-      const QUEST_DURATION = 5 * 60 * 1000;
-      // 未配信（deliverAt > now）のクエストを全部まとめて今すぐ表示
       const updated = prev.map(q =>
         q.deliverAt > now
           ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
           : q
       );
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      setTimeout(() => setQuests(getActiveQuests(updated, [])), 0);
+      // setSchedule更新後にsetQuestsも更新（completedIdsはuseCallbackの外から参照できないためsetQuests側で対応）
+      setTimeout(() => {
+        setQuests(getActiveQuests(updated, []));
+      }, 0);
       return updated;
     });
   }, [setQuests]);
