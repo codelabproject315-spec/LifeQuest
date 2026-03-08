@@ -1134,16 +1134,13 @@ export default function App() {
 
   const completedIdsRef = useRef([]);
   const forceShowNextQuestRef = useRef(null);
-  const forceJustFiredRef = useRef(false); // force後にポーリングが上書きするのを防ぐフラグ
   useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
 
   const scheduleRef = useRef(schedule);
-  // scheduleが変わったら即座にquestsも更新
+  // scheduleが変わったら常にquestsを更新
   useEffect(() => {
     scheduleRef.current = schedule;
-    if (forceJustFiredRef.current) {
-      setQuests(getActiveQuests(schedule, completedIdsRef.current));
-    }
+    setQuests(getActiveQuests(schedule, completedIdsRef.current));
   }, [schedule]);
 
   // 毎2秒: クエスト表示更新 & SWからのフラグ監視 & 日付リセット
@@ -1173,10 +1170,7 @@ export default function App() {
           return;
         }
       } catch {}
-      // force直後はポーリングによる上書きをスキップ
-      if (!forceJustFiredRef.current) {
-        setQuests(getActiveQuests(sched, completedIdsRef.current));
-      }
+      setQuests(getActiveQuests(sched, completedIdsRef.current));
     };
     tick();
     const interval = setInterval(tick, 2000);
@@ -1185,7 +1179,6 @@ export default function App() {
 
   // クエストを強制的に表示する（未完了のうち1個だけ追加アクティブ化・タイマーリセット）
   const forceShowNextQuest = useCallback(() => {
-    forceJustFiredRef.current = true;
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
@@ -1203,7 +1196,6 @@ export default function App() {
         return q;
       });
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
-      setTimeout(() => { forceJustFiredRef.current = false; }, 3000);
       return updated;
     });
   }, []);
