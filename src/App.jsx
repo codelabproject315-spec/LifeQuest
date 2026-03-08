@@ -1242,13 +1242,14 @@ export default function App() {
   }, [forceShowNextQuest]);
 
   // URLパラメータでアプリ起動した場合（バックグラウンドから通知タップ）
+  // URLパラメータ検知 → localStorageにフラグ保存（ログイン完了後に処理）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('forceQuest') === '1' || params.get('forceQuestAll') === '1') {
-      forceShowNextQuest();
+      try { localStorage.setItem('lifequest_force_quest', '1'); } catch {}
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [forceShowNextQuest]);
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -1322,6 +1323,14 @@ export default function App() {
     setCurrentUser(user);
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     registerPushToken(user.id);
+    // 通知タップ起動時のフラグを確認 → ログイン完了後にクエスト追加
+    try {
+      const flag = localStorage.getItem('lifequest_force_quest');
+      if (flag) {
+        localStorage.removeItem('lifequest_force_quest');
+        setTimeout(() => forceShowNextQuestRef.current?.(), 500);
+      }
+    } catch {}
   };
   const handleLogout = () => { setCurrentUser(null); localStorage.removeItem(SESSION_KEY); setActiveTab('home'); };
 
