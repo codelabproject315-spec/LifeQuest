@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, onSnapshot, getDoc, deleteDoc } from 'firebase/firestore';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import {
   Trophy, Camera, Home, User,
@@ -1145,7 +1145,7 @@ export default function App() {
 
   // 毎2秒: クエスト表示更新 & SWからのフラグ監視 & 日付リセット
   useEffect(() => {
-    const tick = () => {
+    const tick = async () => {
       const todayKey = new Date().toDateString();
       let sched = scheduleRef.current;
       // 日付変わったらスケジュール再生成
@@ -1161,11 +1161,20 @@ export default function App() {
           }
         }
       } catch {}
-      // SWからのforceフラグを監視
+      // SWからのforceフラグを監視（localStorage）
       try {
         const flag = localStorage.getItem('lifequest_force_quest');
         if (flag) {
           localStorage.removeItem('lifequest_force_quest');
+          forceShowNextQuestRef.current?.();
+          return;
+        }
+      } catch {}
+      // Firestoreのforceフラグを監視（PWA対応）
+      try {
+        const flagDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'forceQuest'));
+        if (flagDoc.exists() && flagDoc.data()?.active) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'forceQuest'));
           forceShowNextQuestRef.current?.();
           return;
         }
