@@ -219,7 +219,16 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
   };
   const stopCamera = () => { streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null; setIsReady(false); setCamError(''); };
   const handleClose = () => { stopCamera(); onClose(); };
-  const handleCapture = () => { stopCamera(); onCapture(); };
+  const handleCapture = () => {
+    const canvas = document.createElement('canvas');
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    stopCamera();
+    onCapture(base64);
+  };
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col">
@@ -781,29 +790,130 @@ const CountdownTimer = ({ deadlineTs, onExpire }) => {
   );
 };
 
-// ── AI Photo Judge ────────────────────────────────────────
-const judgePhotoWithAI = async (questTitle, questDescription) => {
+// ── 自己申告クエスト（常時承認・ランク最低XP）────────────────
+const SELF_REPORT_QUESTS = new Set([
+  'q_breath', 'q_compliment', 'q_help', 'q_digital',
+  'q_fast', 'q_urgent1', 'q_nophone',
+]);
+
+// ランクごとの最低XP（xpMult適用前）
+const RANK_MIN_XP = { D: 3, C: 5, B: 8, A: 10, S: 6 };
+
+// ── AWS Rekognition 判定 ──────────────────────────────────────
+const REKOGNITION_LABELS = {
+  q_water:     { required: ['Cup', 'Bottle', 'Beverage', 'Drink', 'Water'] },
+  q_posture:   { required: ['Person', 'Chair'] },
+  q_photo:     { required: ['Sky', 'Cloud', 'Outdoors'] },
+  q_smile:     { required: ['Person'] }, // Face Detection で笑顔も検出
+  q_desk:      { required: ['Desk', 'Table', 'Furniture'] },
+  q_gratitude: { required: ['Text', 'Paper', 'Handwriting', 'Pen'] },
+  q_outside:   { required: ['Outdoors', 'Nature', 'Window', 'Sky'] },
+  q_music:     { required: ['Headphones', 'Earphone', 'Speaker'] },
+  q_hand:      { required: ['Sink', 'Hand', 'Soap'] },
+  q_stretch:   { required: ['Person', 'Exercise', 'Yoga', 'Stretching'] },
+  q_walk:      { required: ['Outdoors', 'Road', 'Path', 'Street'] },
+  q_note:      { required: ['Text', 'Paper', 'Notebook', 'Pen'] },
+  q_clean:     { required: ['Broom', 'Vacuum Cleaner', 'Mop', 'Cleaning'] },
+  q_veg:       { required: ['Vegetable', 'Salad', 'Food', 'Plant'] },
+  q_call:      { required: ['Phone', 'Screen', 'Text'] },
+  q_sketch:    { required: ['Drawing', 'Pen', 'Pencil', 'Paper', 'Art'] },
+  q_news:      { required: ['Screen', 'Text', 'Newspaper', 'Book'] },
+  q_cook:      { required: ['Food', 'Cooking', 'Pan', 'Kitchen', 'Meal'] },
+  q_plant:     { required: ['Plant', 'Flower', 'Potted Plant'] },
+  q_compliment:{ required: [] }, // 自己申告
+  q_study:     { required: ['Book', 'Text', 'Reading', 'Notebook'] },
+  q_read:      { required: ['Book', 'Text', 'Reading'] },
+  q_run:       { required: ['Person', 'Running', 'Jogging', 'Road', 'Outdoors'] },
+  q_new:       { required: ['Outdoors', 'Street', 'Road', 'Path'] },
+  q_cook2:     { required: ['Food', 'Cooking', 'Pan', 'Kitchen', 'Meal'] },
+  q_help:      { required: [] }, // 自己申告
+  q_plan:      { required: ['Text', 'Paper', 'Notebook', 'Pen'] },
+  q_digital:   { required: [] }, // 自己申告
+  q_photo2:    { required: ['Outdoors', 'Architecture', 'Nature', 'Art'] },
+  q_talk:      { required: ['Person'] },
+  q_morning:   { required: ['Sky', 'Sunrise', 'Sunlight', 'Outdoors'] },
+  q_exercise:  { required: ['Exercise', 'Sport', 'Gym', 'Dumbbell', 'Person'] },
+  q_learn:     { required: ['Book', 'Text', 'Screen', 'Notebook'] },
+  q_stranger:  { required: ['Person'] },
+  q_create:    { required: ['Drawing', 'Art', 'Paper', 'Pen', 'Music'] },
+  q_fast:      { required: [] }, // 自己申告
+  q_mentor:    { required: ['Person'] },
+  q_explore:   { required: ['Outdoors', 'Building', 'Street', 'Road'] },
+  q_urgent1:   { required: [] }, // 自己申告
+  q_urgent2:   { required: ['Trash', 'Garbage', 'Bag', 'Box', 'Waste'] },
+  q_urgent3:   { required: ['Phone', 'Screen', 'Text'] },
+  q_sunrise:   { required: ['Sky', 'Sunrise', 'Sunlight', 'Outdoors'] },
+  q_cold:      { required: ['Shower', 'Bathroom', 'Water', 'Sink'] },
+  q_nophone:   { required: [] }, // 自己申告
+  q_volunteer: { required: ['Person'] },
+  q_lib:       { required: ['Book', 'Library', 'Building', 'Shelf'] },
+};
+
+const judgePhotoWithRekognition = async (questId, imageBase64) => {
   try {
-    const prompt = `あなたはLifeQuestのクエスト達成判定AIです。
-クエスト「${questTitle}」（${questDescription}）の写真が提出されました。
-デモ環境なので、70%の確率で達成と判定してください。
-以下のJSON形式のみで返答（余計なテキスト不要）:
-{"approved":true/false,"message":"判定理由を20文字以内で","xpBonus":0〜20の数値}`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const REGION = import.meta.env.VITE_AWS_REGION || 'ap-northeast-1';
+    const ACCESS_KEY = import.meta.env.VITE_AWS_ACCESS_KEY_ID || '';
+    const SECRET_KEY = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '';
+
+    // AWS Signature V4 署名
+    const now = new Date();
+    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
+    const dateStamp = amzDate.slice(0, 8);
+    const service = 'rekognition';
+    const host = `${service}.${REGION}.amazonaws.com`;
+    const endpoint = `https://${host}/`;
+    const body = JSON.stringify({ Image: { Bytes: imageBase64 }, MaxLabels: 20, MinConfidence: 60 });
+
+    const sign = async (key, msg) => {
+      const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      return new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(msg)));
+    };
+    const hex = (buf) => Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join('');
+    const sha256 = async (msg) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg))));
+
+    const payloadHash = await sha256(body);
+    const canonicalHeaders = `content-type:application/x-amz-json-1.1\nhost:${host}\nx-amz-date:${amzDate}\nx-amz-target:RekognitionService.DetectLabels\n`;
+    const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
+    const canonicalRequest = `POST\n/\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+    const credentialScope = `${dateStamp}/${REGION}/${service}/aws4_request`;
+    const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${await sha256(canonicalRequest)}`;
+
+    let sigKey = new TextEncoder().encode(`AWS4${SECRET_KEY}`);
+    sigKey = await sign(sigKey, dateStamp);
+    sigKey = await sign(sigKey, REGION);
+    sigKey = await sign(sigKey, service);
+    sigKey = await sign(sigKey, 'aws4_request');
+    const signature = hex(await sign(sigKey, stringToSign));
+    const authorization = `AWS4-HMAC-SHA256 Credential=${ACCESS_KEY}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 150,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: {
+        'Content-Type': 'application/x-amz-json-1.1',
+        'X-Amz-Date': amzDate,
+        'X-Amz-Target': 'RekognitionService.DetectLabels',
+        'Authorization': authorization,
+      },
+      body,
     });
-    const data = await response.json();
-    const text = data.content?.map(i => i.text || '').join('');
-    const clean = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
+
+    const data = await res.json();
+    const detectedLabels = (data.Labels || []).map(l => l.Name);
+    const rule = REKOGNITION_LABELS[questId];
+
+    if (!rule || rule.required.length === 0) {
+      return { approved: true, message: '自己申告で承認', xpBonus: 0, selfReport: true };
+    }
+
+    const matched = rule.required.some(label => detectedLabels.includes(label));
+    return {
+      approved: matched,
+      message: matched ? `${detectedLabels[0]}を検出！` : '条件を満たす物が写っていません',
+      xpBonus: matched ? Math.floor(Math.random() * 10) : 0,
+      selfReport: false,
+    };
   } catch {
-    return { approved: Math.random() > 0.3, message: 'AI判定完了', xpBonus: Math.floor(Math.random() * 15) };
+    return { approved: false, message: '判定に失敗しました', xpBonus: 0 };
   }
 };
 
@@ -820,10 +930,19 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
   const rank = RANKS[quest.rank] || RANKS.D;
   const finalXP = Math.round((quest.xp || 20) * rank.xpMult);
 
-  const handleCapture = async () => {
+  const isSelfReport = SELF_REPORT_QUESTS.has(quest.id);
+
+  const handleSelfReport = () => {
+    const awardXP = Math.round((RANK_MIN_XP[quest.rank] || 3) * rank.xpMult);
+    setJudgeResult({ approved: true, message: '自己申告で承認', xpBonus: 0 });
+    setStatus('approved');
+    setTimeout(() => onComplete(awardXP), 1200);
+  };
+
+  const handleCapture = async (imageBase64) => {
     setIsCameraOpen(false);
     setStatus('uploading');
-    const result = await judgePhotoWithAI(quest.title, quest.description || '');
+    const result = await judgePhotoWithRekognition(quest.id, imageBase64);
     setJudgeResult(result);
     if (result.approved) {
       setStatus('approved');
@@ -913,7 +1032,8 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
         </div>
       )}
 
-      {status === 'idle' && <button type="button" onClick={() => setIsCameraOpen(true)} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all text-sm shadow-sm ${quest.isUrgent ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}><Camera size={16} />カメラで証明</button>}
+      {status === 'idle' && isSelfReport && <button type="button" onClick={handleSelfReport} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all text-sm shadow-sm ${quest.isUrgent ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}><CheckCircle2 size={16} />完了する</button>}
+      {status === 'idle' && !isSelfReport && <button type="button" onClick={() => setIsCameraOpen(true)} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all text-sm shadow-sm ${quest.isUrgent ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}><Camera size={16} />カメラで証明</button>}
       {status === 'uploading' && <div className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold flex items-center justify-center gap-2 text-sm"><Loader2 className="animate-spin" size={16} />AI判定中...</div>}
       {status === 'approved' && <div className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md text-sm"><CheckCircle2 size={16} />達成認定！</div>}
       {status === 'rejected' && <div className="w-full py-3 bg-red-100 text-red-600 rounded-xl font-bold flex items-center justify-center gap-2 text-sm"><X size={16} />未達成 — 再挑戦できます</div>}
