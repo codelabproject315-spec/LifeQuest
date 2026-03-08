@@ -1181,10 +1181,9 @@ export default function App() {
     });
   }, [setQuests]);
 
-  // フォアグラウンド通知受信 → クエスト強制表示
+  // フォアグラウンド通知受信 → クエスト強制表示（バナーはSWが出すのでここでは出さない）
   useEffect(() => {
-    const unsub = onMessage(messaging, (payload) => {
-      showNotification('quest', { title: payload.notification?.title, body: payload.notification?.body });
+    const unsub = onMessage(messaging, () => {
       forceShowNextQuest();
     });
     return unsub;
