@@ -1169,20 +1169,14 @@ export default function App() {
     return () => clearInterval(interval);
   }, []); // 依存配列を空にしてintervalを一度だけ生成
 
-  // クエストを強制的に表示する（未完了・未配信を全部アクティブにする）
+  // クエストを強制的に表示する（未完了を全部アクティブ化・タイマーリセット）
   const forceShowNextQuest = useCallback(() => {
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
-      // 未完了 かつ まだアクティブでないクエストを全て強制表示
-      const hasUpdate = prev.some(q =>
-        !completedIdsRef.current.includes(q.id) &&
-        (q.deliverAt > now || q.deadlineTs < now)
-      );
-      if (!hasUpdate) return prev;
+      // 未完了なら常にdeadlineをリセット（既にアクティブでも再延長する）
       const updated = prev.map(q => {
-        if (!completedIdsRef.current.includes(q.id) &&
-            (q.deliverAt > now || q.deadlineTs < now)) {
+        if (!completedIdsRef.current.includes(q.id)) {
           return { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION };
         }
         return q;
