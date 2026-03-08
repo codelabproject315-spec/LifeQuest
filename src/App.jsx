@@ -1159,22 +1159,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, []); // 依存配列を空にしてintervalを一度だけ生成
 
-  // クエストを強制的に1つ表示する
+  // クエストを強制的に表示する（未完了・未配信を全部アクティブにする）
   const forceShowNextQuest = useCallback(() => {
     setSchedule(prev => {
       const now = Date.now();
       const QUEST_DURATION = 5 * 60 * 1000;
-      // 未完了 & まだアクティブでない（deadlineTs未設定 or 期限切れ）クエストを強制表示
-      const nextIndex = prev.findIndex(q =>
+      // 未完了 かつ まだアクティブでないクエストを全て強制表示
+      const hasUpdate = prev.some(q =>
         !completedIdsRef.current.includes(q.id) &&
         (q.deliverAt > now || q.deadlineTs < now)
       );
-      if (nextIndex === -1) return prev;
-      const updated = prev.map((q, i) =>
-        i === nextIndex
-          ? { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION }
-          : q
-      );
+      if (!hasUpdate) return prev;
+      const updated = prev.map(q => {
+        if (!completedIdsRef.current.includes(q.id) &&
+            (q.deliverAt > now || q.deadlineTs < now)) {
+          return { ...q, deliverAt: now - 1000, deadlineTs: now + QUEST_DURATION };
+        }
+        return q;
+      });
       try { localStorage.setItem(DAILY_QUEST_KEY, JSON.stringify({ dateKey: new Date().toDateString(), schedule: updated })); } catch {}
       setTimeout(() => setQuests(getActiveQuests(updated, completedIdsRef.current)), 0);
       return updated;
