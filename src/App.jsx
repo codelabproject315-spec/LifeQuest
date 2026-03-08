@@ -1172,9 +1172,9 @@ export default function App() {
       } catch {}
       // Firestoreのforceフラグを監視（PWA対応）
       try {
-        const flagDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'forceQuest'));
-        if (flagDoc.exists() && flagDoc.data()?.active) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'forceQuest'));
+        const flagDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data'));
+        if (flagDoc.exists() && flagDoc.data()?.forceQuest === true) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data'), { forceQuest: false });
           forceShowNextQuestRef.current?.();
           return;
         }
