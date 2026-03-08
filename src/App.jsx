@@ -1129,12 +1129,13 @@ export default function App() {
   const [quests, setQuests] = useState(() => getActiveQuests(getOrBuildSchedule(), []));
 
   const completedIdsRef = useRef([]);
+  const forceShowNextQuestRef = useRef(null);
   useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
 
   const scheduleRef = useRef(schedule);
   useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
 
-  // 毎10秒: 新たに deliverAt を迎えたクエストを表示 & 期限切れを削除 & 日付リセット
+  // 毎2秒: クエスト表示更新 & SWからのフラグ監視 & 日付リセット
   useEffect(() => {
     const tick = () => {
       const todayKey = new Date().toDateString();
@@ -1152,10 +1153,19 @@ export default function App() {
           }
         }
       } catch {}
+      // SWからのforceフラグを監視
+      try {
+        const flag = localStorage.getItem('lifequest_force_quest');
+        if (flag) {
+          localStorage.removeItem('lifequest_force_quest');
+          forceShowNextQuestRef.current?.();
+          return;
+        }
+      } catch {}
       setQuests(getActiveQuests(sched, completedIdsRef.current));
     };
     tick();
-    const interval = setInterval(tick, 10000);
+    const interval = setInterval(tick, 2000);
     return () => clearInterval(interval);
   }, []); // 依存配列を空にしてintervalを一度だけ生成
 
@@ -1182,6 +1192,7 @@ export default function App() {
       return updated;
     });
   }, [setQuests]);
+  forceShowNextQuestRef.current = forceShowNextQuest;
 
   // フォアグラウンド通知受信 → クエスト強制表示（バナーはSWが出すのでここでは出さない）
   useEffect(() => {
