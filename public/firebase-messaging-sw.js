@@ -31,13 +31,12 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const appClient = clientList.find(c => c.url.includes(self.location.origin));
+      // 開いていても閉じていても常にURLパラメータ方式で統一
+      const targetUrl = self.location.origin + '/?forceQuestAll=1';
       if (appClient) {
-        // postMessage で FORCE_QUEST_ALL を送る（App.jsx側で受け取りlocalStorageに書く）
-        appClient.postMessage({ type: 'FORCE_QUEST_ALL' });
-        return appClient.focus();
+        return appClient.navigate(targetUrl).then(c => c.focus());
       }
-      // アプリが閉じている → URLパラメータで開く（App.jsx起動時にforceShowNextQuestが呼ばれる）
-      return clients.openWindow('/?forceQuest=1');
+      return clients.openWindow(targetUrl);
     })
   );
 });
