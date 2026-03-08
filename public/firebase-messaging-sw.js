@@ -14,7 +14,10 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
-  const isForce = payload.data?.force === 'true';
+  // 起動中のアプリにクエスト更新を通知
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+    clientList.forEach(client => client.postMessage({ type: 'FORCE_QUEST_ALL' }));
+  });
   return self.registration.showNotification(title || '⚡ 新クエスト到着！', {
     body: body || '5分以内にクリアせよ！',
     icon: '/icon-192.png',
@@ -22,7 +25,6 @@ messaging.onBackgroundMessage((payload) => {
     tag: 'lifequest-quest',
     renotify: true,
     requireInteraction: true,
-    data: { force: isForce },
   });
 });
 
