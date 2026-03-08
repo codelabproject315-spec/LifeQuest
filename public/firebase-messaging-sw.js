@@ -29,15 +29,16 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
       const appClient = clientList.find(c => c.url.includes(self.location.origin));
       if (appClient) {
-        // アプリが開いている → リロードせずpostMessageでクエスト更新
+        await appClient.focus();
         appClient.postMessage({ type: 'FORCE_QUEST_ALL' });
-        return appClient.focus();
+        return;
       }
-      // アプリが閉じている → URLパラメータ付きで起動（App.jsx起動時に検知）
-      return clients.openWindow('/?forceQuestAll=1');
+      // アプリが閉じてる → 開いてから起動完了を待ってpostMessage
+      const newClient = await clients.openWindow('/');
+      setTimeout(() => newClient?.postMessage({ type: 'FORCE_QUEST_ALL' }), 2000);
     })
   );
 });
