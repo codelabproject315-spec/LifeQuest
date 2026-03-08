@@ -12,32 +12,37 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// 最後に受信した通知のforceフラグを記憶する
+let lastPayloadForce = false;
+
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
-  const isForce = payload.data?.force === 'true';
-  return self.registration.showNotification(title || '⚡ 新クエスト到着！', {
+  // 管理者通知かどうか記録
+  lastPayloadForce = payload.data?.force === 'true' || payload.data?.force === true;
+  self.registration.showNotification(title || '⚡ 新クエスト到着！', {
     body: body || '5分以内にクリアせよ！',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'lifequest-quest',
     renotify: true,
-    requireInteraction: true,
-    data: { force: isForce },
+    data: { force: lastPayloadForce },
   });
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const isForceAll = event.notification.data?.force === true;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      const appClient = clientList.find(c => c.url.includes(self.location.origin));
-      if (appClient) {
-        // アプリが開いている → localStorageにフラグを書いてポーリングに検知させる
-        appClient.postMessage({ type: 'FORCE_QUEST_ALL' });
-        return appClient.focus();
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          // 管理者通知なら全クエスト表示、通常なら1個
+          client.postMessage({ type: isForceAll ? 'FORCE_QUEST_ALL' : 'FORCE_QUEST' });
+          return client.focus();
+        }
       }
-      // アプリが閉じている → URLパラメータで開く
-      return clients.openWindow('/?forceQuest=1');
+      // アプリが閉じている場合はURLパラメータで区別
+      return clients.openWindow(isForceAll ? '/?forceQuestAll=1' : '/?forceQuest=1');
     })
   );
 });
