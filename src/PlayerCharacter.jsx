@@ -44,10 +44,10 @@ const PlayerCharacter = ({ map, lat, lng }) => {
           if (humanoid) {
             // 左腕を下げる（Z軸で-70度）
             const leftUpperArm = humanoid.getNormalizedBoneNode('leftUpperArm');
-            if (leftUpperArm) leftUpperArm.rotation.z = -Math.PI * 0.7;
+            if (leftUpperArm) leftUpperArm.rotation.z = Math.PI * 0.7;
             // 右腕を下げる（Z軸で+70度）
             const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
-            if (rightUpperArm) rightUpperArm.rotation.z = Math.PI * 0.7;
+            if (rightUpperArm) rightUpperArm.rotation.z = +Math.PI * 0.7;
           }
         });
 
