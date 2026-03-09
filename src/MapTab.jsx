@@ -16,12 +16,15 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [QUEST_LNG, QUEST_LAT],
-      zoom: 18,
+      zoom: 20,
       pitch: 65,
       antialias: true
     });
 
     map.on('load', () => {
+      // リアルタイム再描画（キャラアニメーション用）
+      const repaintInterval = setInterval(() => map.triggerRepaint(), 16); // ~60fps
+      map._repaintInterval = repaintInterval;
       setMapInstance(map);
       // 3D建物などの共通レイヤー設定
       const sources = map.getStyle().sources;
