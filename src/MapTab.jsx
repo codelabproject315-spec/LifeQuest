@@ -12,7 +12,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   useEffect(() => {
     if (mapInstance) return;
 
-    const map = new window.maplibregl.Map({
+    const map = new maplibregl.Map({
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [QUEST_LNG, QUEST_LAT],
