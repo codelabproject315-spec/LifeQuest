@@ -16,11 +16,16 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
   useEffect(() => {
     const dLat = lat - latRef.current;
     const dLng = lng - lngRef.current;
-    // 十分移動した場合のみ向きを更新（初回はnullのまま＝北向き固定）
-    if (headingRef.current !== null && (Math.abs(dLat) > 0.000001 || Math.abs(dLng) > 0.000001)) {
-      headingRef.current = Math.atan2(dLng, dLat);
-    } else if (headingRef.current === null && (Math.abs(dLat) > 0.000001 || Math.abs(dLng) > 0.000001)) {
-      headingRef.current = Math.atan2(dLng, dLat);
+    // 5m以上移動した場合のみ向きを更新（ノイズ対策）
+    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+    if (dist > 0.00005) {
+      const newHeading = Math.atan2(dLng, dLat);
+      if (headingRef.current === null) {
+        headingRef.current = newHeading;
+      } else {
+        // ローパスフィルター: 急激な回転を抑える
+        headingRef.current = headingRef.current * 0.85 + newHeading * 0.15;
+      }
     }
     latRef.current = lat;
     lngRef.current = lng;
