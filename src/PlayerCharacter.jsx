@@ -53,7 +53,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
             VRMUtils.rotateVRM0(vrm);
             this.scene.add(vrm.scene);
             vrmRef.current = vrm;
-            vrm.scene.scale.set(10, 10, 10);
+            vrm.scene.scale.set(15, 15, 15);
             vrm.scene.rotation.x = Math.PI / 2;
             vrm.scene.rotation.z = -(bearingRef.current ?? 0) * (Math.PI / 180);
           },
