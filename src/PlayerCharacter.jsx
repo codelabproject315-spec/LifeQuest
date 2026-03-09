@@ -8,6 +8,13 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
   const vrmRef = useRef(null);
   const mixerRef = useRef(null);
   const clockRef = useRef(new THREE.Clock());
+  // ✅ クロージャ問題対策: 最新のlat/lng/bearingをrefで保持
+  const latRef = useRef(lat);
+  const lngRef = useRef(lng);
+  const bearingRef = useRef(bearing);
+
+  // propsが変わるたびにrefを更新
+  useEffect(() => { latRef.current = lat; lngRef.current = lng; bearingRef.current = bearing; }, [lat, lng, bearing]);
 
   useEffect(() => {
     if (!map) return;
@@ -38,7 +45,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
           // モデルのサイズ調整（地図のスケールに合わせる）
           vrm.scene.scale.set(15, 15, 15);
           vrm.scene.rotation.x = Math.PI / 2; // 立たせる
-          vrm.scene.rotation.z = -(bearing ?? 0) * (Math.PI / 180); // 向き
+          vrm.scene.rotation.z = -(bearingRef.current ?? 0) * (Math.PI / 180); // 向き
           
 
         });
@@ -55,11 +62,11 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
 
         // キャラの向きをマップのbearingに同期
         if (vrmRef.current) {
-          vrmRef.current.scene.rotation.z = -(bearing ?? 0) * (Math.PI / 180);
+          vrmRef.current.scene.rotation.z = -(bearingRef.current ?? 0) * (Math.PI / 180);
         }
 
         // ✅ 緯度経度をMapLibreのメルカトル座標に変換してモデルを正しい位置に配置
-        const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng ?? 0, lat: lat ?? 0 }, 0);
+        const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng: lngRef.current ?? 0, lat: latRef.current ?? 0 }, 0);
         const scale = mc.meterInMercatorCoordinateUnits();
         const modelMatrix = new THREE.Matrix4()
           .makeTranslation(mc.x, mc.y, mc.z)
