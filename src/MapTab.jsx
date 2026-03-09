@@ -53,6 +53,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
       @keyframes radarRing { 0%{transform:scale(0.6);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
       @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+      .leaflet-bottom.leaflet-right { margin-bottom: 100px !important; }
     `;
     const styleEl = document.createElement('style');
     styleEl.textContent = styles;
