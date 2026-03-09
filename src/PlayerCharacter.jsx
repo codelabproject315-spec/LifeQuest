@@ -53,8 +53,9 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
             VRMUtils.rotateVRM0(vrm);
             this.scene.add(vrm.scene);
             vrmRef.current = vrm;
-            vrm.scene.scale.set(15, 15, 15);
+            vrm.scene.scale.set(10, 10, 10);
             vrm.scene.rotation.x = Math.PI / 2;
+            vrm.scene.rotation.z = -(bearingRef.current ?? 0) * (Math.PI / 180);
           },
           (progress) => {
             if (progress.total > 0) console.log('[VRM] 進捗:', Math.round(progress.loaded / progress.total * 100) + '%');
@@ -86,7 +87,6 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
         const scale = mc.meterInMercatorCoordinateUnits();
         const modelMatrix = new THREE.Matrix4()
           .makeTranslation(mc.x, mc.y, mc.z)
-          .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2))
           .scale(new THREE.Vector3(scale * 1, -scale * 1, scale * 1));
 
         const m = new THREE.Matrix4().fromArray(matrix);
