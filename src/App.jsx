@@ -1297,7 +1297,7 @@ export default function App() {
 
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto pb-24">
+      <main className={`flex-1 overflow-y-auto ${activeTab === 'map' ? '' : 'pb-24'}`}>
         {activeTab === 'home' && (
           <div className="px-4 py-4">
             {/* ランク凡例 */}
