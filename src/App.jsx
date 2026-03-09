@@ -1337,7 +1337,7 @@ export default function App() {
           </div>
         )}
         {activeTab === 'map' && (
-          <div style={{ height: '100%' }}>
+          <div style={{ height: 'calc(100% - 96px)' }}>
             <MapTab quests={quests} userLocation={userLocation} gpsStatus={gpsStatus} mockOffset={mockOffset} setMockOffset={setMockOffset} QUEST_LAT={QUEST_LAT} QUEST_LNG={QUEST_LNG} />
           </div>
         )}
