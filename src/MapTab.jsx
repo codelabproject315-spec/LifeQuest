@@ -27,6 +27,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
   const playerMarkerRef = useRef(null);
+  const followPlayer = useRef(true);
   const [selectedQuest, setSelectedQuest] = useState(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -70,6 +71,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       }).addTo(map);
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
+      map.on('dragstart', () => { followPlayer.current = false; });
       leafletMap.current = map;
       setMapReady(true);
     };
@@ -113,7 +115,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       `;
       const playerIcon = L.divIcon({ html: playerHtml, className: '', iconSize: [56, 56], iconAnchor: [28, 56] });
       playerMarkerRef.current = L.marker([activeLocation.lat, activeLocation.lng], { icon: playerIcon, zIndexOffset: 1000 }).addTo(leafletMap.current);
-      leafletMap.current.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true, duration: 0.8 });
+      if (followPlayer.current) {
+        leafletMap.current.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true, duration: 0.8 });
+      }
     }
 
     // クエストマーカー
@@ -222,7 +226,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       {/* 現在地ボタン */}
       {activeLocation && (
         <button
-          onClick={() => leafletMap.current?.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true })}
+          onClick={() => {
+            followPlayer.current = true;
+            leafletMap.current?.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true });
+          }}
           style={{
             position: 'absolute', bottom: 90, right: 14, zIndex: 500,
             width: 42, height: 42, borderRadius: '50%',
