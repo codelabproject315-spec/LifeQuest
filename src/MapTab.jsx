@@ -171,7 +171,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   }, [userLocation, quests, mapReady, mockOffset]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* マップ本体（全画面） */}
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
