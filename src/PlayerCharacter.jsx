@@ -24,7 +24,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
         headingRef.current = newHeading;
       } else {
         // ローパスフィルター: 急激な回転を抑える
-        headingRef.current = headingRef.current * 0.85 + newHeading * 0.20;
+        headingRef.current = headingRef.current * 0.60 + newHeading * 0.30;
       }
     }
     latRef.current = lat;
