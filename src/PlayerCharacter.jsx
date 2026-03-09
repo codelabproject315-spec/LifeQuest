@@ -10,13 +10,16 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
   const latRef = useRef(lat);
   const lngRef = useRef(lng);
   const bearingRef = useRef(bearing);
-  const headingRef = useRef(0);
+  const headingRef = useRef(null); // nullの間は向き計算をスキップ
 
   // propsが変わるたびにrefを更新 & 進行方向を計算
   useEffect(() => {
     const dLat = lat - latRef.current;
     const dLng = lng - lngRef.current;
-    if (Math.abs(dLat) > 0.000001 || Math.abs(dLng) > 0.000001) {
+    // 十分移動した場合のみ向きを更新（初回はnullのまま＝北向き固定）
+    if (headingRef.current !== null && (Math.abs(dLat) > 0.000001 || Math.abs(dLng) > 0.000001)) {
+      headingRef.current = Math.atan2(dLng, dLat);
+    } else if (headingRef.current === null && (Math.abs(dLat) > 0.000001 || Math.abs(dLng) > 0.000001)) {
       headingRef.current = Math.atan2(dLng, dLat);
     }
     latRef.current = lat;
@@ -53,9 +56,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
             VRMUtils.rotateVRM0(vrm);
             this.scene.add(vrm.scene);
             vrmRef.current = vrm;
-            vrm.scene.scale.set(15, 15, 15);
-            vrm.scene.rotation.x = Math.PI / 2;
-            vrm.scene.rotation.z = -(bearingRef.current ?? 0) * (Math.PI / 180);
+            vrm.scene.scale.set(10, 10, 10);
           },
           (progress) => {
             if (progress.total > 0) console.log('[VRM] 進捗:', Math.round(progress.loaded / progress.total * 100) + '%');
@@ -76,9 +77,14 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
       render: function (gl, matrix) {
         if (!vrmRef.current) return;
 
-        // 進行方向 + bearingでキャラの向きを決定
+        // Quaternionで回転を合成（オイラー角干渉を回避）
+        // 1. まずX軸で90度回転して立たせる
+        const qStand = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+        // 2. Z軸で進行方向+bearingを回転
         const bearingRad = -(bearingRef.current ?? 0) * (Math.PI / 180);
-        vrmRef.current.scene.rotation.z = headingRef.current + bearingRad;
+        const qFacing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (headingRef.current ?? 0) + bearingRad);
+        // 合成してセット
+        vrmRef.current.scene.quaternion.copy(qFacing.multiply(qStand));
 
         // 緯度経度 → メルカトル座標変換
         const mc = maplibregl.MercatorCoordinate.fromLngLat(
