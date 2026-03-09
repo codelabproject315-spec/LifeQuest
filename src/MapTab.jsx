@@ -103,7 +103,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       [-60, -30, 0, 30, 60].forEach(x => addRoad(x, 0, 5, 400));
 
       // 建物
-      const bColors = [0xbfdbfe, 0xddd6fe, 0xfce7f3, 0xd1fae5, 0xfef3c7, 0xe0e7ff, 0ffedd5];
+      const bColors = [0xbfdbfe, 0xddd6fe, 0xfce7f3, 0xd1fae5, 0xfef3c7, 0xe0e7ff, 0xffedd5];
       const rng = s => { let v = Math.sin(s * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
       let s = 0;
       for (let gx = -4; gx <= 4; gx++) {
