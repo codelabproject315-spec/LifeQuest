@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Navigation, Zap, X, MapPin } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { MapPin, Zap, X, Navigation } from 'lucide-react';
 
-// ── ユーティリティ ────────────────────────────────────────
 const calculateDistance = (lat1, lng1, lat2, lng2) => {
   const R = 6371000;
   const toRad = d => (d * Math.PI) / 180;
@@ -15,393 +14,253 @@ const formatDistance = m => {
   return m >= 1000 ? `${(m/1000).toFixed(1)}km` : `${Math.round(m)}m`;
 };
 
-// 緯度経度 → 3Dワールド座標
-const latLngToWorld = (lat, lng, originLat, originLng) => {
-  const x = (lng - originLng) * Math.cos((originLat * Math.PI) / 180) * 111320;
-  const z = -(lat - originLat) * 111320;
-  return { x, z };
-};
-
 const RANK_CONFIG = {
-  S: { color: 0xf59e0b, emissive: 0xf59e0b, emoji: '👑', label: 'S', height: 1.8 },
-  A: { color: 0x8b5cf6, emissive: 0x8b5cf6, emoji: '⚡', label: 'A', height: 1.5 },
-  B: { color: 0x3b82f6, emissive: 0x3b82f6, emoji: '🔵', label: 'B', height: 1.2 },
-  C: { color: 0x10b981, emissive: 0x10b981, emoji: '🟢', label: 'C', height: 1.0 },
-  D: { color: 0x6b7280, emissive: 0x6b7280, emoji: '⚪', label: 'D', height: 0.8 },
+  S: { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)', emoji: '👑' },
+  A: { color: '#8b5cf6', glow: 'rgba(139,92,246,0.6)', emoji: '⚡' },
+  B: { color: '#3b82f6', glow: 'rgba(59,130,246,0.6)', emoji: '🔵' },
+  C: { color: '#10b981', glow: 'rgba(16,185,129,0.6)', emoji: '🟢' },
+  D: { color: '#6b7280', glow: 'rgba(107,114,128,0.4)', emoji: '⚪' },
 };
 
 const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
-  const canvasRef = useRef(null);
-  const threeRef = useRef({});
-  const animFrameRef = useRef(null);
+  const mapRef = useRef(null);
+  const leafletMap = useRef(null);
+  const markersRef = useRef([]);
+  const playerMarkerRef = useRef(null);
   const [selectedQuest, setSelectedQuest] = useState(null);
-  const [threeReady, setThreeReady] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   const locationQuests = quests.filter(q => q.type === 'location');
   const mockLocation = { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG };
   const mockDist = calculateDistance(mockLocation.lat, mockLocation.lng, QUEST_LAT, QUEST_LNG);
   const activeLocation = userLocation || (gpsStatus === 'mock' ? mockLocation : null);
 
-  // Three.js初期化
+  // Leaflet初期化
   useEffect(() => {
-    const initThree = (THREE) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+    if (leafletMap.current) return;
 
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x7dd3fc);
-      scene.fog = new THREE.FogExp2(0x87ceeb, 0.007);
+    const styles = `
+      .leaflet-container { font-family: system-ui, sans-serif; }
+      .leaflet-control-zoom { border: none !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; border-radius: 12px !important; overflow: hidden; }
+      .leaflet-control-zoom a { background: rgba(255,255,255,0.95) !important; color: #6366f1 !important; font-weight: 900 !important; border: none !important; width: 36px !important; height: 36px !important; line-height: 36px !important; font-size: 18px !important; }
+      .quest-popup .leaflet-popup-content-wrapper { background: rgba(15,15,30,0.92); backdrop-filter: blur(16px); border-radius: 18px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 0; }
+      .quest-popup .leaflet-popup-tip-container { display: none; }
+      .quest-popup .leaflet-popup-content { margin: 0; color: white; }
+      .leaflet-popup-close-button { color: rgba(255,255,255,0.6) !important; font-size: 20px !important; top: 8px !important; right: 10px !important; }
+      @keyframes playerPulse { 0%,100%{transform:scale(1);opacity:0.8} 50%{transform:scale(1.6);opacity:0} }
+      @keyframes questPulse { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.8);opacity:0} }
+      @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+      @keyframes radarRing { 0%{transform:scale(0.6);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
+      @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    `;
+    const styleEl = document.createElement('style');
+    styleEl.textContent = styles;
+    document.head.appendChild(styleEl);
 
-      const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 800);
-      camera.position.set(0, 32, 28);
-      camera.lookAt(0, 0, 0);
+    const loadLeaflet = () => {
+      if (!mapRef.current || leafletMap.current) return;
+      const L = window.L;
+      const map = L.map(mapRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([QUEST_LAT, QUEST_LNG], 16);
 
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setSize(W, H);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.shadowMap.enabled = true;
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19, subdomains: 'abcd',
+      }).addTo(map);
 
-      // 光源
-      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-      const sun = new THREE.DirectionalLight(0xfffde7, 1.3);
-      sun.position.set(30, 50, 20);
-      sun.castShadow = true;
-      sun.shadow.mapSize.width = 1024;
-      sun.shadow.mapSize.height = 1024;
-      sun.shadow.camera.near = 0.5;
-      sun.shadow.camera.far = 300;
-      sun.shadow.camera.left = -100;
-      sun.shadow.camera.right = 100;
-      sun.shadow.camera.top = 100;
-      sun.shadow.camera.bottom = -100;
-      scene.add(sun);
-
-      // 地面
-      const groundGeo = new THREE.PlaneGeometry(400, 400, 50, 50);
-      const posArr = groundGeo.attributes.position;
-      for (let i = 0; i < posArr.count; i++) {
-        const x = posArr.getX(i), z = posArr.getZ(i);
-        posArr.setY(i, Math.sin(x * 0.04) * 0.4 + Math.cos(z * 0.04) * 0.4);
-      }
-      groundGeo.computeVertexNormals();
-      const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: 0x86efac }));
-      ground.rotation.x = -Math.PI / 2;
-      ground.receiveShadow = true;
-      scene.add(ground);
-
-      // 道路
-      const roadMat = new THREE.MeshLambertMaterial({ color: 0xd1d5db });
-      const addRoad = (x, z, w, d) => {
-        const r = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, d), roadMat);
-        r.position.set(x, 0.03, z);
-        r.receiveShadow = true;
-        scene.add(r);
-      };
-      [-60, -30, 0, 30, 60].forEach(z => addRoad(0, z, 400, 5));
-      [-60, -30, 0, 30, 60].forEach(x => addRoad(x, 0, 5, 400));
-
-      // 建物
-      const bColors = [0xbfdbfe, 0xddd6fe, 0xfce7f3, 0xd1fae5, 0xfef3c7, 0xe0e7ff, 0xffedd5];
-      const rng = s => { let v = Math.sin(s * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
-      let s = 0;
-      for (let gx = -4; gx <= 4; gx++) {
-        for (let gz = -4; gz <= 4; gz++) {
-          if (Math.abs(gx * 30) < 4 || Math.abs(gz * 30) < 4) continue;
-          const bx = gx * 30 + (rng(s++) - 0.5) * 12;
-          const bz = gz * 30 + (rng(s++) - 0.5) * 12;
-          const bw = 5 + rng(s++) * 9;
-          const bh = 3 + rng(s++) * 14;
-          const bd = 5 + rng(s++) * 9;
-          const color = bColors[Math.floor(rng(s++) * bColors.length)];
-          const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(bw, bh, bd),
-            new THREE.MeshLambertMaterial({ color })
-          );
-          mesh.position.set(bx, bh / 2, bz);
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          scene.add(mesh);
-          const roof = new THREE.Mesh(
-            new THREE.ConeGeometry(Math.max(bw, bd) * 0.72, 2.5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xef4444 })
-          );
-          roof.position.set(bx, bh + 1.2, bz);
-          roof.rotation.y = Math.PI / 4;
-          roof.castShadow = true;
-          scene.add(roof);
-        }
-      }
-
-      // 木
-      for (let i = 0; i < 50; i++) {
-        const tx = (rng(s++) - 0.5) * 250, tz = (rng(s++) - 0.5) * 250;
-        const th = 2.5 + rng(s++) * 3;
-        const trunk = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.2, 0.3, th, 6),
-          new THREE.MeshLambertMaterial({ color: 0x92400e })
-        );
-        trunk.position.set(tx, th / 2, tz);
-        trunk.castShadow = true;
-        scene.add(trunk);
-        const leaf = new THREE.Mesh(
-          new THREE.SphereGeometry(1.3 + rng(s++) * 0.8, 8, 6),
-          new THREE.MeshLambertMaterial({ color: 0x16a34a })
-        );
-        leaf.position.set(tx, th + 1.1, tz);
-        leaf.castShadow = true;
-        scene.add(leaf);
-      }
-
-      // プレイヤー
-      const playerGroup = new THREE.Group();
-      const addPart = (geo, color, px, py, pz, rx = 0, rz = 0) => {
-        const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
-        m.position.set(px, py, pz);
-        m.rotation.x = rx; m.rotation.z = rz;
-        m.castShadow = true;
-        playerGroup.add(m);
-        return m;
-      };
-      addPart(new THREE.CylinderGeometry(0.42, 0.52, 1.3, 8), 0x6366f1, 0, 0.65, 0);
-      const head = addPart(new THREE.SphereGeometry(0.46, 12, 10), 0xfbbf24, 0, 1.65, 0);
-      addPart(new THREE.CylinderGeometry(0.37, 0.52, 0.42, 8), 0xdc2626, 0, 2.0, 0);
-      addPart(new THREE.CylinderGeometry(0.67, 0.67, 0.09, 8), 0xdc2626, 0, 1.82, 0);
-      const armL = addPart(new THREE.CylinderGeometry(0.15, 0.15, 0.85, 6), 0x6366f1, -0.67, 0.82, 0, 0, 0.4);
-      const armR = addPart(new THREE.CylinderGeometry(0.15, 0.15, 0.85, 6), 0x6366f1, 0.67, 0.82, 0, 0, -0.4);
-      const legL = addPart(new THREE.CylinderGeometry(0.18, 0.15, 0.85, 6), 0x1e40af, -0.23, 0.0, 0);
-      const legR = addPart(new THREE.CylinderGeometry(0.18, 0.15, 0.85, 6), 0x1e40af, 0.23, 0.0, 0);
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(1.1, 0.09, 8, 32),
-        new THREE.MeshBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.7 })
-      );
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = 0.1;
-      playerGroup.add(ring);
-      playerGroup.position.set(0, 0, 0);
-      scene.add(playerGroup);
-
-      // 雲
-      const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 });
-      for (let i = 0; i < 15; i++) {
-        const cg = new THREE.Group();
-        const cx = (rng(s++) - 0.5) * 350, cz = (rng(s++) - 0.5) * 350;
-        for (let j = 0; j < 5; j++) {
-          const c = new THREE.Mesh(new THREE.SphereGeometry(3 + rng(s++) * 3, 7, 5), cloudMat);
-          c.position.set((rng(s++) - 0.5) * 8, (rng(s++) - 0.5) * 2, (rng(s++) - 0.5) * 5);
-          cg.add(c);
-        }
-        cg.position.set(cx, 65 + rng(s++) * 20, cz);
-        scene.add(cg);
-      }
-
-      const questObjects = [];
-
-      const onResize = () => {
-        const w = window.innerWidth, h = window.innerHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      };
-      window.addEventListener('resize', onResize);
-
-      threeRef.current = { scene, camera, renderer, playerGroup, questObjects, ring, armL, armR, legL, legR, THREE };
-      setThreeReady(true);
-
-      let t = 0;
-      const animate = () => {
-        animFrameRef.current = requestAnimationFrame(animate);
-        t += 0.018;
-
-        playerGroup.position.y = Math.sin(t * 2) * 0.09;
-        ring.rotation.z = t;
-        ring.material.opacity = 0.35 + Math.sin(t * 3) * 0.3;
-        armL.rotation.z = 0.4 + Math.sin(t * 4) * 0.22;
-        armR.rotation.z = -(0.4 + Math.sin(t * 4 + Math.PI) * 0.22);
-        legL.rotation.x = Math.sin(t * 4) * 0.22;
-        legR.rotation.x = Math.sin(t * 4 + Math.PI) * 0.22;
-
-        questObjects.forEach((obj, i) => {
-          obj.group.position.y = obj.baseY + Math.sin(t * 2 + i * 1.2) * 0.35;
-          obj.group.rotation.y = t * 0.7;
-          obj.ring.material.opacity = 0.25 + Math.sin(t * 3 + i) * 0.2;
-          obj.ring.scale.setScalar(1 + Math.sin(t * 2 + i) * 0.18);
-        });
-
-        const px = playerGroup.position.x, pz = playerGroup.position.z;
-        camera.position.set(px, 32, pz + 28);
-        camera.lookAt(px, 0, pz);
-
-        renderer.render(scene, camera);
-      };
-      animate();
-
-      return () => { window.removeEventListener('resize', onResize); };
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      leafletMap.current = map;
+      setMapReady(true);
     };
 
-    if (window.THREE) { initThree(window.THREE); return; }
-    const sc = document.createElement('script');
-    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    sc.onload = () => initThree(window.THREE);
-    document.head.appendChild(sc);
+    if (window.L) { loadLeaflet(); return; }
 
-    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = loadLeaflet;
+    document.head.appendChild(script);
   }, []);
 
-  // プレイヤー位置更新
+  // マーカー更新
   useEffect(() => {
-    if (!threeReady || !threeRef.current.playerGroup) return;
-    const loc = userLocation || mockLocation;
-    const { x, z } = latLngToWorld(loc.lat, loc.lng, QUEST_LAT, QUEST_LNG);
-    const pg = threeRef.current.playerGroup;
-    pg.position.x += (x - pg.position.x) * 0.12;
-    pg.position.z += (z - pg.position.z) * 0.12;
-  });
+    if (!leafletMap.current || !window.L || !mapReady) return;
+    const L = window.L;
 
-  // クエストオブジェクト更新
-  useEffect(() => {
-    if (!threeReady || !threeRef.current.scene) return;
-    const { scene, questObjects, THREE } = threeRef.current;
-    questObjects.forEach(obj => scene.remove(obj.group));
-    questObjects.length = 0;
-    const loc = activeLocation || { lat: QUEST_LAT, lng: QUEST_LNG };
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+    if (playerMarkerRef.current) playerMarkerRef.current.remove();
 
-    locationQuests.forEach((q) => {
-      if (!q.lat || !q.lng) return;
-      const { x, z } = latLngToWorld(q.lat, q.lng, QUEST_LAT, QUEST_LNG);
-      const dist = calculateDistance(loc.lat, loc.lng, q.lat, q.lng);
-      const unlocked = dist <= q.radius;
-      const rank = q.rank || 'D';
-      const cfg = RANK_CONFIG[rank] || RANK_CONFIG.D;
-
-      const group = new THREE.Group();
-      group.position.set(x, 0, z);
-
-      const baseMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.6, 1.9, 0.32, 16),
-        new THREE.MeshLambertMaterial({ color: unlocked ? cfg.color : 0x9ca3af, transparent: true, opacity: 0.9 })
-      );
-      baseMesh.position.y = 0.16;
-      baseMesh.castShadow = true;
-      group.add(baseMesh);
-
-      const tower = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5, 0.72, cfg.height * 2, 8),
-        new THREE.MeshLambertMaterial({ color: unlocked ? cfg.color : 0x6b7280 })
-      );
-      tower.position.y = cfg.height;
-      tower.castShadow = true;
-      group.add(tower);
-
-      const gem = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.65),
-        new THREE.MeshLambertMaterial({
-          color: unlocked ? cfg.color : 0x9ca3af,
-          emissive: unlocked ? cfg.emissive : 0x333333,
-          emissiveIntensity: unlocked ? 0.45 : 0.1,
-        })
-      );
-      gem.position.y = cfg.height * 2 + 0.75;
-      gem.castShadow = true;
-      group.add(gem);
-
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(1.9, 0.11, 8, 32),
-        new THREE.MeshBasicMaterial({ color: unlocked ? cfg.color : 0x9ca3af, transparent: true, opacity: 0.5 })
-      );
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = 0.32;
-      group.add(ring);
-
-      const circle = new THREE.Mesh(
-        new THREE.RingGeometry(q.radius / 10 - 0.4, q.radius / 10, 64),
-        new THREE.MeshBasicMaterial({ color: unlocked ? cfg.color : 0x9ca3af, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
-      );
-      circle.rotation.x = -Math.PI / 2;
-      circle.position.y = 0.06;
-      group.add(circle);
-
-      scene.add(group);
-      questObjects.push({ group, ring, gem, baseY: cfg.height, quest: q });
-    });
-
-    threeRef.current.questObjects = questObjects;
-  }, [quests, userLocation, mockOffset, threeReady]);
-
-  // レイキャスト（タップでクエスト選択）
-  const handleCanvasClick = useCallback((e) => {
-    if (!threeReady || !threeRef.current.scene) return;
-    const { camera, questObjects, THREE } = threeRef.current;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const mouse = new THREE.Vector2(
-      ((cx - rect.left) / rect.width) * 2 - 1,
-      -((cy - rect.top) / rect.height) * 2 + 1
-    );
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    const allMeshes = questObjects.flatMap(o => o.group.children);
-    const hits = raycaster.intersectObjects(allMeshes);
-    if (hits.length > 0) {
-      const found = questObjects.find(o => o.group.children.includes(hits[0].object));
-      if (found) setSelectedQuest(found.quest);
+    // プレイヤー
+    if (activeLocation) {
+      const playerHtml = `
+        <div style="position:relative;width:56px;height:56px">
+          <div style="position:absolute;inset:-6px;border-radius:50%;border:2px solid #818cf8;animation:radarRing 2s infinite"></div>
+          <div style="position:absolute;inset:-6px;border-radius:50%;border:2px solid #818cf8;animation:radarRing 2s 1s infinite"></div>
+          <div style="position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);width:28px;height:8px;background:rgba(0,0,0,0.18);border-radius:50%;filter:blur(3px)"></div>
+          <div style="position:absolute;inset:0;animation:float 2.2s ease-in-out infinite">
+            <div style="width:56px;height:56px;background:linear-gradient(135deg,#818cf8,#6366f1);border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px rgba(99,102,241,0.3),0 6px 20px rgba(99,102,241,0.5);display:flex;align-items:center;justify-content:center;font-size:26px">
+              🧙
+            </div>
+          </div>
+          <div style="position:absolute;top:2px;right:2px;width:12px;height:12px;background:#10b981;border:2.5px solid white;border-radius:50%;box-shadow:0 0 8px #10b981"></div>
+        </div>
+      `;
+      const playerIcon = L.divIcon({ html: playerHtml, className: '', iconSize: [56, 56], iconAnchor: [28, 56] });
+      playerMarkerRef.current = L.marker([activeLocation.lat, activeLocation.lng], { icon: playerIcon, zIndexOffset: 1000 }).addTo(leafletMap.current);
+      leafletMap.current.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true, duration: 0.8 });
     }
-  }, [threeReady]);
+
+    // クエストマーカー
+    locationQuests.forEach(q => {
+      const dist = activeLocation ? calculateDistance(activeLocation.lat, activeLocation.lng, q.lat, q.lng) : null;
+      const unlocked = dist !== null && dist <= q.radius;
+      const cfg = RANK_CONFIG[q.rank || 'D'] || RANK_CONFIG.D;
+
+      const questHtml = `
+        <div style="position:relative;width:48px;height:58px;cursor:pointer">
+          ${unlocked ? `
+            <div style="position:absolute;top:0;left:0;width:48px;height:48px;border-radius:50%;background:${cfg.color};animation:questPulse 1.8s infinite;opacity:0.5"></div>
+            <div style="position:absolute;top:0;left:0;width:48px;height:48px;border-radius:50%;background:${cfg.color};animation:questPulse 1.8s 0.9s infinite;opacity:0.3"></div>
+          ` : ''}
+          <div style="position:absolute;top:0;left:0;width:48px;height:48px;animation:float ${2 + Math.random()}s ease-in-out infinite">
+            <div style="
+              width:48px;height:48px;
+              background:${unlocked ? `linear-gradient(135deg,${cfg.color},${cfg.color}cc)` : 'linear-gradient(135deg,#9ca3af,#6b7280)'};
+              border-radius:50% 50% 50% 0;
+              transform:rotate(-45deg);
+              border:3px solid white;
+              box-shadow:0 4px 16px ${unlocked ? cfg.glow : 'rgba(0,0,0,0.2)'};
+              display:flex;align-items:center;justify-content:center;
+            ">
+              <div style="transform:rotate(45deg);font-size:20px">${unlocked ? cfg.emoji : '🔒'}</div>
+            </div>
+          </div>
+          ${unlocked ? `
+            <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);background:${cfg.color};color:white;font-size:9px;font-weight:900;padding:2px 6px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.2)">${q.rank || 'D'}ランク</div>
+          ` : ''}
+        </div>
+      `;
+
+      const questIcon = L.divIcon({ html: questHtml, className: '', iconSize: [48, 58], iconAnchor: [24, 58] });
+      const marker = L.marker([q.lat, q.lng], { icon: questIcon })
+        .addTo(leafletMap.current);
+
+      marker.on('click', () => setSelectedQuest(q));
+
+      const circle = L.circle([q.lat, q.lng], {
+        radius: q.radius,
+        color: unlocked ? cfg.color : '#9ca3af',
+        fillColor: unlocked ? cfg.color : '#9ca3af',
+        fillOpacity: unlocked ? 0.08 : 0.04,
+        weight: unlocked ? 2 : 1,
+        dashArray: unlocked ? null : '6,4',
+      }).addTo(leafletMap.current);
+
+      markersRef.current.push(marker, circle);
+    });
+  }, [userLocation, quests, mapReady, mockOffset]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
-      <canvas
-        ref={canvasRef}
-        style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }}
-        onClick={handleCanvasClick}
-        onTouchEnd={handleCanvasClick}
-      />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {/* マップ本体（全画面） */}
+      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
       {/* ヘッダーHUD */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '14px 16px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', pointerEvents: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <span style={{ fontSize: 24 }}>🗺️</span>
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 500,
+        padding: '12px 14px',
+        background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        pointerEvents: 'none',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20 }}>🗺️</span>
           <div>
-            <div style={{ color: 'white', fontWeight: 900, fontSize: 17, textShadow: '0 2px 6px rgba(0,0,0,0.6)' }}>クエストマップ</div>
-            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: 700 }}>{locationQuests.length}個のクエストが近くにある</div>
+            <div style={{ color: 'white', fontWeight: 900, fontSize: 15, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>クエストマップ</div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: 700 }}>{locationQuests.length}個のクエストが近くにある</div>
           </div>
         </div>
-        <div style={{ background: gpsStatus === 'ok' ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)', border: `1px solid ${gpsStatus === 'ok' ? '#10b981' : '#f59e0b'}`, borderRadius: 20, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5, backdropFilter: 'blur(8px)' }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: gpsStatus === 'ok' ? '#10b981' : '#f59e0b', boxShadow: `0 0 8px ${gpsStatus === 'ok' ? '#10b981' : '#f59e0b'}` }} />
+        <div style={{
+          background: gpsStatus === 'ok' ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)',
+          border: `1px solid ${gpsStatus === 'ok' ? '#10b981' : '#f59e0b'}`,
+          borderRadius: 20, padding: '4px 10px',
+          display: 'flex', alignItems: 'center', gap: 5,
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: gpsStatus === 'ok' ? '#10b981' : '#f59e0b', boxShadow: `0 0 6px ${gpsStatus === 'ok' ? '#10b981' : '#f59e0b'}` }} />
           <span style={{ color: 'white', fontSize: 11, fontWeight: 900 }}>{gpsStatus === 'ok' ? 'GPS接続中' : 'デモモード'}</span>
         </div>
       </div>
 
       {/* デモスライダー */}
       {gpsStatus === 'mock' && (
-        <div style={{ position: 'absolute', top: 70, left: 12, right: 12, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(14px)', borderRadius: 14, padding: '10px 14px', border: '1px solid rgba(251,191,36,0.4)' }}>
+        <div style={{
+          position: 'absolute', top: 60, left: 12, right: 12, zIndex: 500,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)',
+          borderRadius: 14, padding: '10px 14px',
+          border: '1px solid rgba(251,191,36,0.4)',
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <MapPin size={12} color="#fbbf24" />
             <span style={{ color: '#fbbf24', fontSize: 11, fontWeight: 900 }}>デモ位置を移動</span>
-            <span style={{ marginLeft: 'auto', color: mockDist <= 200 ? '#10b981' : '#94a3b8', fontSize: 11, fontWeight: 900 }}>{mockDist <= 200 ? '🔓 解放！' : formatDistance(mockDist)}</span>
+            <span style={{ marginLeft: 'auto', color: mockDist <= 200 ? '#10b981' : '#94a3b8', fontSize: 11, fontWeight: 900 }}>
+              {mockDist <= 200 ? '🔓 解放！' : formatDistance(mockDist)}
+            </span>
           </div>
-          <input type="range" min={0} max={800} step={10} value={mockOffset} onChange={e => setMockOffset(Number(e.target.value))} style={{ width: '100%', accentColor: '#818cf8' }} />
+          <input type="range" min={0} max={800} step={10} value={mockOffset}
+            onChange={e => setMockOffset(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#818cf8' }} />
         </div>
       )}
 
-      {/* クエスト横スクロール */}
+      {/* 現在地ボタン */}
+      {activeLocation && (
+        <button
+          onClick={() => leafletMap.current?.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true })}
+          style={{
+            position: 'absolute', bottom: 90, right: 14, zIndex: 500,
+            width: 42, height: 42, borderRadius: '50%',
+            background: 'white', border: 'none',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}
+        >
+          <Navigation size={18} color="#6366f1" />
+        </button>
+      )}
+
+      {/* クエスト横スクロールリスト */}
       {locationQuests.length > 0 && !selectedQuest && (
-        <div style={{ position: 'absolute', bottom: 100, left: 0, right: 0, padding: '0 12px' }}>
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+        <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, zIndex: 500, padding: '0 12px' }}>
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
             {locationQuests.map(q => {
               const dist = activeLocation ? calculateDistance(activeLocation.lat, activeLocation.lng, q.lat, q.lng) : null;
               const unlocked = dist !== null && dist <= q.radius;
               const cfg = RANK_CONFIG[q.rank || 'D'] || RANK_CONFIG.D;
-              const colorHex = '#' + cfg.color.toString(16).padStart(6, '0');
               return (
-                <button key={q.id} onClick={() => setSelectedQuest(q)} style={{ flexShrink: 0, background: unlocked ? `linear-gradient(135deg,${colorHex}44,rgba(0,0,0,0.65))` : 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', border: `1.5px solid ${unlocked ? colorHex + '88' : 'rgba(255,255,255,0.1)'}`, borderRadius: 14, padding: '9px 13px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 160 }}>
+                <button key={q.id} onClick={() => {
+                  setSelectedQuest(q);
+                  if (leafletMap.current) leafletMap.current.setView([q.lat, q.lng], 17, { animate: true });
+                }} style={{
+                  flexShrink: 0, cursor: 'pointer',
+                  background: unlocked ? `linear-gradient(135deg,${cfg.color}44,rgba(0,0,0,0.7))` : 'rgba(0,0,0,0.65)',
+                  backdropFilter: 'blur(12px)',
+                  border: `1.5px solid ${unlocked ? cfg.color + '88' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: 14, padding: '8px 12px',
+                  display: 'flex', alignItems: 'center', gap: 8, minWidth: 155,
+                }}>
                   <span style={{ fontSize: 20 }}>{cfg.emoji}</span>
                   <div style={{ textAlign: 'left' }}>
-                    <div style={{ color: 'white', fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.title}</div>
-                    <div style={{ color: unlocked ? '#10b981' : '#94a3b8', fontSize: 10, fontWeight: 700 }}>{unlocked ? '✅ 範囲内' : `📏 ${formatDistance(dist)}`}</div>
+                    <div style={{ color: 'white', fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap', maxWidth: 95, overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.title}</div>
+                    <div style={{ color: unlocked ? '#10b981' : '#94a3b8', fontSize: 10, fontWeight: 700 }}>
+                      {unlocked ? '✅ 範囲内' : `📏 ${formatDistance(dist)}`}
+                    </div>
                   </div>
                 </button>
               );
@@ -410,29 +269,39 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         </div>
       )}
 
-      {/* クエスト詳細 */}
+      {/* クエスト詳細パネル */}
       {selectedQuest && (() => {
         const q = selectedQuest;
         const dist = activeLocation ? calculateDistance(activeLocation.lat, activeLocation.lng, q.lat, q.lng) : null;
         const unlocked = dist !== null && dist <= q.radius;
         const cfg = RANK_CONFIG[q.rank || 'D'] || RANK_CONFIG.D;
-        const colorHex = '#' + cfg.color.toString(16).padStart(6, '0');
         return (
-          <div style={{ position: 'absolute', bottom: 100, left: 12, right: 12, background: 'rgba(10,10,25,0.92)', backdropFilter: 'blur(20px)', borderRadius: 22, border: `1.5px solid ${colorHex}55`, padding: 18, boxShadow: `0 12px 40px ${colorHex}33` }}>
-            <button onClick={() => setSelectedQuest(null)} style={{ position: 'absolute', top: 13, right: 13, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <X size={15} color="white" />
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 11 }}>
-              <div style={{ width: 46, height: 46, borderRadius: 13, background: colorHex + '33', border: `2px solid ${colorHex}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{cfg.emoji}</div>
+          <div style={{
+            position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 500,
+            background: 'rgba(10,10,25,0.92)', backdropFilter: 'blur(20px)',
+            borderRadius: 22, border: `1.5px solid ${cfg.color}55`,
+            padding: 16, boxShadow: `0 12px 40px ${cfg.glow}`,
+          }}>
+            <button onClick={() => setSelectedQuest(null)} style={{
+              position: 'absolute', top: 12, right: 12,
+              background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
+              width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}><X size={14} color="white" /></button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: cfg.color + '33', border: `2px solid ${cfg.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{cfg.emoji}</div>
               <div>
-                <div style={{ color: colorHex, fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{q.rank || 'D'}ランク</div>
+                <div style={{ color: cfg.color, fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{q.rank || 'D'}ランク</div>
                 <div style={{ color: 'white', fontWeight: 900, fontSize: 15 }}>{q.title}</div>
               </div>
             </div>
-            {q.description && <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, marginBottom: 11 }}>{q.description}</div>}
+            {q.description && <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, marginBottom: 10 }}>{q.description}</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: unlocked ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: 13 }}>{unlocked ? '✅ 範囲内 — クリアできる！' : `📏 あと ${formatDistance(Math.max(0, dist - q.radius))}`}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#fbbf24', fontWeight: 900, fontSize: 14 }}><Zap size={14} />+{q.xp} XP</div>
+              <span style={{ color: unlocked ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: 13 }}>
+                {unlocked ? '✅ 範囲内 — クリアできる！' : `📏 あと ${formatDistance(Math.max(0, dist - q.radius))}`}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#fbbf24', fontWeight: 900, fontSize: 14 }}>
+                <Zap size={14} />+{q.xp} XP
+              </div>
             </div>
           </div>
         );
