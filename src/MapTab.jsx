@@ -15,7 +15,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     const map = new maplibregl.Map({
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-      center: [QUEST_LNG, QUEST_LAT],
+      center: [activeLocation?.lng ?? QUEST_LNG, activeLocation?.lat ?? QUEST_LAT],
       zoom: 18,
       pitch: 65,
       antialias: true
@@ -58,7 +58,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
       
       {/* 3Dキャラクターを地図に重ねる */}
-      {mapInstance && <PlayerCharacter map={mapInstance} lat={activeLocation?.lat ?? QUEST_LAT} lng={activeLocation?.lng ?? QUEST_LNG} />}
+      {mapInstance && <PlayerCharacter map={mapInstance} lat={activeLocation?.lat ?? QUEST_LAT} lng={activeLocation?.lng ?? QUEST_LNG} bearing={mapInstance.getBearing()} />}
 
       {/* 現在地ボタンなどのUI */}
       <button 
