@@ -66,6 +66,10 @@ const PlayerCharacter = ({ map }) => {
       }
     };
 
+    // 既にレイヤーがあれば一度削除してから追加（再マウント対策）
+    if (map.getLayer('vrm-player-layer')) {
+      map.removeLayer('vrm-player-layer');
+    }
     map.addLayer(vrmLayer);
 
     return () => {
