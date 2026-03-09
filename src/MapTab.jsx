@@ -16,7 +16,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [QUEST_LNG, QUEST_LAT],
-      zoom: 20,
+      zoom: 18,
       pitch: 65,
       antialias: true
     });
