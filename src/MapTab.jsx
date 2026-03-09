@@ -14,11 +14,12 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
     const map = new maplibregl.Map({
       container: mapRef.current,
-      style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [activeLocation?.lng ?? QUEST_LNG, activeLocation?.lat ?? QUEST_LAT],
-      zoom: 25,
-      pitch: 65,
-      antialias: true
+      zoom: 18,
+      pitch: 75,
+      antialias: true,
+      centerOffset: [0, 150]  // キャラを画面下寄りに
     });
 
     map.on('load', () => {
@@ -36,19 +37,22 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         'type': 'fill-extrusion',
         'minzoom': 15,
         'paint': {
-          'fill-extrusion-color': '#aacbff',
+          'fill-extrusion-color': '#7ecfcf',
           'fill-extrusion-height': ['get', 'render_height']
         }
       });
     });
   }, []);
 
-  // 位置の追従ロジック
+  // 位置の追従ロジック（ポケGoっぽくキャラの後ろからカメラ追従）
   useEffect(() => {
     if (mapInstance && activeLocation) {
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
-        duration: 1000
+        zoom: 18,
+        pitch: 75,
+        duration: 800,
+        easing: (t) => t
       });
     }
   }, [activeLocation, mapInstance]);
