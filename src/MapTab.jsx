@@ -6,42 +6,62 @@ import PlayerCharacter from './PlayerCharacter.jsx'; // 新しいファイルを
 
 const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
   const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null); // 二重初期化防止
   const [mapInstance, setMapInstance] = useState(null);
   const activeLocation = userLocation || (gpsStatus === 'mock' ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG } : null);
+  const activeLocationRef = useRef(activeLocation);
+  useEffect(() => { activeLocationRef.current = activeLocation; }, [activeLocation]);
 
   useEffect(() => {
-    if (mapInstance) return;
+    if (mapInstanceRef.current) return; // 二重初期化を確実に防ぐ
+
+    const initLng = activeLocationRef.current?.lng ?? QUEST_LNG;
+    const initLat = activeLocationRef.current?.lat ?? QUEST_LAT;
 
     const map = new maplibregl.Map({
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: [activeLocation?.lng ?? QUEST_LNG, activeLocation?.lat ?? QUEST_LAT],
+      center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
       zoom: 18,
       pitch: 75,
       antialias: true,
-      centerOffset: [0, 150]  // キャラを画面下寄りに
+      centerOffset: [0, 150]
     });
+    mapInstanceRef.current = map;
 
     map.on('load', () => {
+      // ロード完了後も現在地にjumpTo（アニメーションなし）
+      const loc = activeLocationRef.current;
+      if (loc) {
+        map.jumpTo({ center: [loc.lng, loc.lat] });
+      }
       // リアルタイム再描画（キャラアニメーション用）
-      const repaintInterval = setInterval(() => map.triggerRepaint(), 16); // ~60fps
+      const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
-      // 3D建物などの共通レイヤー設定
+      // 3D建物レイヤー
       const sources = map.getStyle().sources;
       const buildingSource = Object.keys(sources).find(k => sources[k].type === 'vector') ?? 'openmaptiles';
-      map.addLayer({
-        'id': '3d-buildings',
-        'source': buildingSource,
-        'source-layer': 'building',
-        'type': 'fill-extrusion',
-        'minzoom': 15,
-        'paint': {
-          'fill-extrusion-color': '#7ecfcf',
-          'fill-extrusion-height': ['get', 'render_height']
-        }
-      });
+      try {
+        map.addLayer({
+          'id': '3d-buildings',
+          'source': buildingSource,
+          'source-layer': 'building',
+          'type': 'fill-extrusion',
+          'minzoom': 15,
+          'paint': {
+            'fill-extrusion-color': '#7ecfcf',
+            'fill-extrusion-height': ['get', 'render_height']
+          }
+        });
+      } catch (e) { console.warn('3d-buildings layer error:', e); }
     });
+
+    return () => {
+      if (map._repaintInterval) clearInterval(map._repaintInterval);
+      map.remove();
+      mapInstanceRef.current = null;
+    };
   }, []);
 
   // 位置の追従ロジック（ポケGoっぽくキャラの後ろからカメラ追従）
