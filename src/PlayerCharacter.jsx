@@ -39,7 +39,16 @@ const PlayerCharacter = ({ map, lat, lng }) => {
           vrm.scene.scale.set(15, 15, 15);
           vrm.scene.rotation.x = Math.PI / 2; // 立たせる
           
-          // ここで着せ替えやポーズの初期設定が可能
+          // Tポーズ解除：両腕を下げる
+          const humanoid = vrm.humanoid;
+          if (humanoid) {
+            // 左腕を下げる（Z軸で-70度）
+            const leftUpperArm = humanoid.getNormalizedBoneNode('leftUpperArm');
+            if (leftUpperArm) leftUpperArm.rotation.z = -Math.PI * 0.7;
+            // 右腕を下げる（Z軸で+70度）
+            const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
+            if (rightUpperArm) rightUpperArm.rotation.z = Math.PI * 0.7;
+          }
         });
 
         this.renderer = new THREE.WebGLRenderer({
@@ -62,10 +71,43 @@ const PlayerCharacter = ({ map, lat, lng }) => {
         const m = new THREE.Matrix4().fromArray(matrix);
         this.camera.projectionMatrix = m.multiply(modelMatrix);
         
-        // アニメーションの更新（将来用）
+        // アニメーション更新
         const delta = clockRef.current.getDelta();
+        const elapsed = clockRef.current.elapsedTime;
         if (vrmRef.current) {
           vrmRef.current.update(delta);
+          const humanoid = vrmRef.current.humanoid;
+          if (humanoid) {
+            const t = elapsed * 2.5; // 歩行速度
+            const armSwing = Math.sin(t) * 0.5;
+            const legSwing = Math.sin(t) * 0.4;
+            const bodyBob = Math.abs(Math.sin(t)) * 0.03; // 上下の揺れ
+
+            // 腕の振り
+            const lUA = humanoid.getNormalizedBoneNode('leftUpperArm');
+            const rUA = humanoid.getNormalizedBoneNode('rightUpperArm');
+            if (lUA) { lUA.rotation.z = -Math.PI * 0.7; lUA.rotation.x = armSwing; }
+            if (rUA) { rUA.rotation.z =  Math.PI * 0.7; rUA.rotation.x = -armSwing; }
+
+            // 足の振り
+            const lUL = humanoid.getNormalizedBoneNode('leftUpperLeg');
+            const rUL = humanoid.getNormalizedBoneNode('rightUpperLeg');
+            const lLL = humanoid.getNormalizedBoneNode('leftLowerLeg');
+            const rLL = humanoid.getNormalizedBoneNode('rightLowerLeg');
+            if (lUL) lUL.rotation.x = legSwing;
+            if (rUL) rUL.rotation.x = -legSwing;
+            // 膝は前に出た足だけ曲げる
+            if (lLL) lLL.rotation.x = Math.max(0, -legSwing) * 0.5;
+            if (rLL) rLL.rotation.x = Math.max(0, legSwing) * 0.5;
+
+            // 体の左右揺れ
+            const spine = humanoid.getNormalizedBoneNode('spine');
+            if (spine) spine.rotation.z = Math.sin(t) * 0.05;
+
+            // 上下ボブ
+            const hips = humanoid.getNormalizedBoneNode('hips');
+            if (hips) hips.position.y = bodyBob;
+          }
         }
 
         this.renderer.resetState();
