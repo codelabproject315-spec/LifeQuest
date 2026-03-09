@@ -37,6 +37,7 @@ const PlayerCharacter = ({ map, lat, lng }) => {
 
           // モデルのサイズ調整（地図のスケールに合わせる）
           vrm.scene.scale.set(15, 15, 15);
+          vrm.scene.rotation.x = Math.PI / 2; // 立たせる
           
           // ここで着せ替えやポーズの初期設定が可能
         });
@@ -56,7 +57,7 @@ const PlayerCharacter = ({ map, lat, lng }) => {
         const scale = mc.meterInMercatorCoordinateUnits();
         const modelMatrix = new THREE.Matrix4()
           .makeTranslation(mc.x, mc.y, mc.z)
-          .scale(new THREE.Vector3(scale * 15, -scale * 15, scale * 15));
+          .scale(new THREE.Vector3(scale * 2, -scale * 2, scale * 2));
 
         const m = new THREE.Matrix4().fromArray(matrix);
         this.camera.projectionMatrix = m.multiply(modelMatrix);
