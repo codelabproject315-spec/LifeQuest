@@ -14,6 +14,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
 
   // propsが変わるたびにrefを更新 & 進行方向を計算
   useEffect(() => {
+    console.log('[heading] lat:', lat, 'lng:', lng, 'dLat:', lat - latRef.current, 'dLng:', lng - lngRef.current); // ← これを追加
     const dLat = lat - latRef.current;
     const dLng = lng - lngRef.current;
     // 5m以上移動した場合のみ向きを更新（ノイズ対策）
