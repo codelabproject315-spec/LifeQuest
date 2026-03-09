@@ -16,7 +16,6 @@ const formatDistance = m => {
   return m >= 1000 ? `${(m/1000).toFixed(1)}km` : `${Math.round(m)}m`;
 };
 
-// ランクごとの色の設定
 const RANK_CONFIG = {
   S: { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)', emoji: '👑' },
   A: { color: '#8b5cf6', glow: 'rgba(139,92,246,0.6)', emoji: '⚡' },
@@ -38,19 +37,39 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const mockDist = calculateDistance(mockLocation.lat, mockLocation.lng, QUEST_LAT, QUEST_LNG);
   const activeLocation = userLocation || (gpsStatus === 'mock' ? mockLocation : null);
 
-  // 1. MapLibre GL 初期化と3D設定
+  // 1. MapLibre GL 初期化と3Dビルボード設定
   useEffect(() => {
     if (mapGL.current) return;
 
-    // 3D表現用のカスタムCSS注入
     const styleEl = document.createElement('style');
     styleEl.textContent = `
       .maplibregl-canvas { outline: none; }
-      .marker-3d { transform-style: preserve-3d; }
-      /* ポケモンGOのようにキャラを垂直に立たせるアニメーション */
-      @keyframes float3d { 
-        0%, 100% { transform: translateY(0) rotateX(-65deg); } 
-        50% { transform: translateY(-15px) rotateX(-65deg); } 
+      
+      /* 3D空間でキャラクターを直立させる設定 */
+      .marker-3d-container {
+        perspective: 1000px;
+        transform-style: preserve-3d;
+      }
+      .character-billboard {
+        transform-style: preserve-3d;
+        transform: rotateX(-65deg); /* 地図の傾斜を打ち消す */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      @keyframes float-hero {
+        0%, 100% { transform: rotateX(-65deg) translateY(0); }
+        50% { transform: rotateX(-65deg) translateY(-15px); }
+      }
+      .character-shadow {
+        position: absolute;
+        bottom: -5px;
+        width: 40px;
+        height: 12px;
+        background: rgba(0,0,0,0.25);
+        border-radius: 50%;
+        filter: blur(4px);
+        transform: rotateX(90deg); /* 地面に置く */
       }
       @keyframes radarRing3d { 
         0% { transform: scale(0.6) rotateX(90deg); opacity: 0.8; } 
@@ -65,13 +84,13 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
         center: [QUEST_LNG, QUEST_LAT],
         zoom: 17,
-        pitch: 65, // 👈 斜め見下ろし視点
+        pitch: 65, // 3D視点
         bearing: 0,
         antialias: true
       });
 
       map.on('load', () => {
-        // 3D建物のレイヤー追加
+        // 3D建物の表示
         map.addLayer({
           'id': '3d-buildings',
           'source': 'openmaptiles',
@@ -82,19 +101,15 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             'fill-extrusion-color': '#aacbff',
             'fill-extrusion-height': ['get', 'render_height'],
             'fill-extrusion-base': ['get', 'render_min_height'],
-            'fill-extrusion-opacity': 0.8
+            'fill-extrusion-opacity': 0.7
           }
         });
-
-        // 背景に空のグラデーションを設定
         mapRef.current.style.background = 'linear-gradient(to top, #aacbff 50%, #3a8dff 100%)';
-        
         mapGL.current = map;
         setMapReady(true);
       });
     };
 
-    // ライブラリの動的読み込み
     if (!window.maplibregl) {
       const link = document.createElement('link');
       link.href = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css';
@@ -109,36 +124,35 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     }
   }, []);
 
-  // 2. プレイヤーマーカーの更新
+  // 2. プレイヤーマーカーの更新 (3Dビルボード)
   useEffect(() => {
     if (!mapGL.current || !mapReady || !activeLocation) return;
 
     if (!playerMarkerRef.current) {
       const el = document.createElement('div');
-      el.className = 'marker-3d';
+      el.className = 'marker-3d-container';
       el.innerHTML = `
-        <div style="position:relative; width:70px; height:70px;">
-          <div style="position:absolute; inset:-10px; border:4px solid #6366f1; border-radius:50%; animation: radarRing3d 2s infinite;"></div>
-          <div style="width:70px; height:70px; background:linear-gradient(135deg,#818cf8,#6366f1); border-radius:50%; border:4px solid white; display:flex; align-items:center; justify-content:center; font-size:35px; box-shadow:0 10px 25px rgba(0,0,0,0.4); animation: float3d 2s infinite;">
-            🧙
+        <div class="character-shadow"></div>
+        <div class="character-billboard" style="animation: float-hero 2s ease-in-out infinite;">
+          <div style="position:relative; width:70px; height:70px;">
+            <div style="position:absolute; inset:-10px; border:4px solid #6366f1; border-radius:50%; animation: radarRing3d 2s infinite;"></div>
+            <div style="width:70px; height:70px; background:linear-gradient(135deg,#818cf8,#6366f1); border-radius:50%; border:3px solid white; display:flex; align-items:center; justify-content:center; font-size:40px; box-shadow:0 10px 30px rgba(0,0,0,0.4);">
+              🧙
+            </div>
           </div>
         </div>
       `;
-      playerMarkerRef.current = new window.maplibregl.Marker({ element: el })
+      playerMarkerRef.current = new window.maplibregl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([activeLocation.lng, activeLocation.lat])
         .addTo(mapGL.current);
     } else {
       playerMarkerRef.current.setLngLat([activeLocation.lng, activeLocation.lat]);
     }
 
-    // カメラがプレイヤーを追従
-    mapGL.current.easeTo({
-      center: [activeLocation.lng, activeLocation.lat],
-      duration: 1000
-    });
+    mapGL.current.easeTo({ center: [activeLocation.lng, activeLocation.lat], duration: 1000 });
   }, [activeLocation, mapReady]);
 
-  // 3. クエストマーカーの同期
+  // 3. クエストマーカーの更新
   useEffect(() => {
     if (!mapGL.current || !mapReady) return;
 
@@ -146,15 +160,17 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       if (!markersRef.current[q.id]) {
         const cfg = RANK_CONFIG[q.rank || 'D'];
         const el = document.createElement('div');
-        el.className = 'marker-3d';
-        el.style.cursor = 'pointer';
+        el.className = 'marker-3d-container';
         el.innerHTML = `
-          <div style="width:45px; height:45px; background:${cfg.color}; border:3px solid white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 8px 20px ${cfg.glow}; animation: float3d ${2 + Math.random()}s infinite;">
-            ${cfg.emoji}
+          <div class="character-shadow"></div>
+          <div class="character-billboard" style="animation: float-hero ${2 + Math.random()}s ease-in-out infinite;">
+            <div style="width:45px; height:45px; background:${cfg.color}; border:3px solid white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 8px 20px ${cfg.glow};">
+              ${cfg.emoji}
+            </div>
           </div>
         `;
         el.onclick = () => setSelectedQuest(q);
-        markersRef.current[q.id] = new window.maplibregl.Marker({ element: el })
+        markersRef.current[q.id] = new window.maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([q.lng, q.lat])
           .addTo(mapGL.current);
       }
@@ -163,7 +179,6 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-      {/* マップコンテナ */}
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
       {/* 現在地ボタン */}
@@ -180,7 +195,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         </button>
       )}
 
-      {/* デモスライダー (GPSがmockの場合のみ表示) */}
+      {/* デモスライダー */}
       {gpsStatus === 'mock' && (
         <div style={{
           position: 'absolute', top: 70, left: 15, right: 15, zIndex: 500,
@@ -197,7 +212,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         </div>
       )}
 
-      {/* クエスト詳細パネル */}
+      {/* クエスト詳細 */}
       {selectedQuest && (
         <div style={{
           position: 'absolute', bottom: 25, left: 15, right: 15, zIndex: 1000,
@@ -208,13 +223,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             <span style={{ background: RANK_CONFIG[selectedQuest.rank || 'D'].color, color: 'white', padding: '4px 12px', borderRadius: 12, fontSize: 10, fontWeight: 900 }}>
               {selectedQuest.rank} RANK
             </span>
-            <button onClick={() => setSelectedQuest(null)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', p: 5 }}><X size={20} color="#94a3b8"/></button>
+            <button onClick={() => setSelectedQuest(null)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', padding: 5 }}><X size={20} color="#94a3b8"/></button>
           </div>
           <h3 style={{ fontSize: 20, fontWeight: 900, color: '#1e293b' }}>{selectedQuest.title}</h3>
           <p style={{ color: '#64748b', fontSize: 14, marginTop: 5 }}>{selectedQuest.description}</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 15, color: '#f59e0b', fontWeight: 900 }}>
-            <Zap size={16} /> +{selectedQuest.xp} XP
-          </div>
         </div>
       )}
     </div>
