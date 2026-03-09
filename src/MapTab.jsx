@@ -45,35 +45,52 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     styleEl.textContent = `
       .maplibregl-canvas { outline: none; }
       
-      /* 3D空間でキャラクターを直立させる設定 */
+      /* 3D空間の設定 */
       .marker-3d-container {
         perspective: 1000px;
         transform-style: preserve-3d;
+        width: 100px;
+        height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
       }
+
+      /* 地図の傾斜(-65度)を打ち消して垂直に立たせる */
       .character-billboard {
         transform-style: preserve-3d;
-        transform: rotateX(-65deg); /* 地図の傾斜を打ち消す */
+        transform: rotateX(-65deg); 
         display: flex;
         flex-direction: column;
         align-items: center;
+        position: relative;
+        z-index: 2;
       }
+
+      /* キャラクターの浮遊アニメーション */
       @keyframes float-hero {
         0%, 100% { transform: rotateX(-65deg) translateY(0); }
-        50% { transform: rotateX(-65deg) translateY(-15px); }
+        50% { transform: rotateX(-65deg) translateY(-25px); }
       }
+
+      /* 地面に張り付く影 */
       .character-shadow {
         position: absolute;
-        bottom: -5px;
-        width: 40px;
-        height: 12px;
-        background: rgba(0,0,0,0.25);
+        bottom: 0;
+        left: 50%;
+        margin-left: -25px;
+        width: 50px;
+        height: 20px;
+        background: rgba(0,0,0,0.35);
         border-radius: 50%;
-        filter: blur(4px);
-        transform: rotateX(90deg); /* 地面に置く */
+        filter: blur(5px);
+        transform: rotateX(90deg); /* 地面に水平に寝かせる */
+        z-index: 1;
       }
+
       @keyframes radarRing3d { 
         0% { transform: scale(0.6) rotateX(90deg); opacity: 0.8; } 
-        100% { transform: scale(3) rotateX(90deg); opacity: 0; } 
+        100% { transform: scale(3.5) rotateX(90deg); opacity: 0; } 
       }
     `;
     document.head.appendChild(styleEl);
@@ -83,14 +100,13 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         container: mapRef.current,
         style: 'https://tiles.basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
         center: [QUEST_LNG, QUEST_LAT],
-        zoom: 17,
-        pitch: 65, // 3D視点
+        zoom: 17.5,
+        pitch: 65, 
         bearing: 0,
         antialias: true
       });
 
       map.on('load', () => {
-        // 3D建物の表示
         map.addLayer({
           'id': '3d-buildings',
           'source': 'openmaptiles',
@@ -124,7 +140,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     }
   }, []);
 
-  // 2. プレイヤーマーカーの更新 (3Dビルボード)
+  // 2. プレイヤーマーカーの更新 (3Dビルボード強化)
   useEffect(() => {
     if (!mapGL.current || !mapReady || !activeLocation) return;
 
@@ -133,10 +149,17 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       el.className = 'marker-3d-container';
       el.innerHTML = `
         <div class="character-shadow"></div>
-        <div class="character-billboard" style="animation: float-hero 2s ease-in-out infinite;">
-          <div style="position:relative; width:70px; height:70px;">
-            <div style="position:absolute; inset:-10px; border:4px solid #6366f1; border-radius:50%; animation: radarRing3d 2s infinite;"></div>
-            <div style="width:70px; height:70px; background:linear-gradient(135deg,#818cf8,#6366f1); border-radius:50%; border:3px solid white; display:flex; align-items:center; justify-content:center; font-size:40px; box-shadow:0 10px 30px rgba(0,0,0,0.4);">
+        <div class="character-billboard" style="animation: float-hero 2.2s ease-in-out infinite;">
+          <div style="position:relative; width:80px; height:80px;">
+            <div style="position:absolute; inset:-12px; border:5px solid #6366f1; border-radius:50%; animation: radarRing3d 2s infinite;"></div>
+            <div style="
+              width:80px; height:80px; 
+              background:linear-gradient(135deg,#818cf8,#6366f1); 
+              border-radius:50%; border:5px solid white; 
+              display:flex; align-items:center; justify-content:center; 
+              font-size:50px; 
+              box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+            ">
               🧙
             </div>
           </div>
@@ -164,7 +187,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         el.innerHTML = `
           <div class="character-shadow"></div>
           <div class="character-billboard" style="animation: float-hero ${2 + Math.random()}s ease-in-out infinite;">
-            <div style="width:45px; height:45px; background:${cfg.color}; border:3px solid white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 8px 20px ${cfg.glow};">
+            <div style="width:50px; height:50px; background:${cfg.color}; border:3px solid white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:25px; box-shadow:0 10px 25px ${cfg.glow};">
               ${cfg.emoji}
             </div>
           </div>
@@ -184,49 +207,32 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       {/* 現在地ボタン */}
       {activeLocation && (
         <button
-          onClick={() => mapGL.current?.easeTo({ center: [activeLocation.lng, activeLocation.lat], pitch: 65, zoom: 17 })}
+          onClick={() => mapGL.current?.easeTo({ center: [activeLocation.lng, activeLocation.lat], pitch: 65, zoom: 17.5 })}
           style={{
             position: 'absolute', bottom: 180, right: 10, zIndex: 500,
-            width: 48, height: 48, borderRadius: '50%', background: 'white', border: 'none',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            width: 50, height: 50, borderRadius: '50%', background: 'white', border: 'none',
+            boxShadow: '0 5px 20px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}
         >
-          <Navigation size={22} color="#6366f1" />
+          <Navigation size={24} color="#6366f1" />
         </button>
       )}
 
-      {/* デモスライダー */}
-      {gpsStatus === 'mock' && (
-        <div style={{
-          position: 'absolute', top: 70, left: 15, right: 15, zIndex: 500,
-          background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)',
-          borderRadius: 20, padding: 15, boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-             <span style={{ fontWeight: 900, fontSize: 12, color: '#6366f1' }}>デモ位置移動</span>
-             <span style={{ fontWeight: 900, fontSize: 12 }}>{formatDistance(mockDist)}</span>
-          </div>
-          <input type="range" min={0} max={800} step={10} value={mockOffset} 
-                 onChange={e => setMockOffset(Number(e.target.value))}
-                 style={{ width: '100%', accentColor: '#6366f1' }} />
-        </div>
-      )}
-
-      {/* クエスト詳細 */}
+      {/* 詳細パネル */}
       {selectedQuest && (
         <div style={{
-          position: 'absolute', bottom: 25, left: 15, right: 15, zIndex: 1000,
-          background: 'white', padding: 25, borderRadius: 30,
-          boxShadow: '0 15px 50px rgba(0,0,0,0.2)', border: '1px solid #f1f5f9'
+          position: 'absolute', bottom: 30, left: 20, right: 20, zIndex: 1000,
+          background: 'white', padding: '25px', borderRadius: '35px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)', border: '1px solid #f1f5f9'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ background: RANK_CONFIG[selectedQuest.rank || 'D'].color, color: 'white', padding: '4px 12px', borderRadius: 12, fontSize: 10, fontWeight: 900 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+            <span style={{ background: RANK_CONFIG[selectedQuest.rank || 'D'].color, color: 'white', padding: '5px 15px', borderRadius: 15, fontSize: 12, fontWeight: 900 }}>
               {selectedQuest.rank} RANK
             </span>
-            <button onClick={() => setSelectedQuest(null)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', padding: 5 }}><X size={20} color="#94a3b8"/></button>
+            <button onClick={() => setSelectedQuest(null)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', padding: 8 }}><X size={24} color="#94a3b8"/></button>
           </div>
-          <h3 style={{ fontSize: 20, fontWeight: 900, color: '#1e293b' }}>{selectedQuest.title}</h3>
-          <p style={{ color: '#64748b', fontSize: 14, marginTop: 5 }}>{selectedQuest.description}</p>
+          <h3 style={{ fontSize: 24, fontWeight: 900, color: '#1e293b' }}>{selectedQuest.title}</h3>
+          <p style={{ color: '#64748b', fontSize: 16, marginTop: 8 }}>{selectedQuest.description}</p>
         </div>
       )}
     </div>
