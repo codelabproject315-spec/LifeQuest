@@ -83,8 +83,8 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
             // 腕の振り
             const lUA = humanoid.getNormalizedBoneNode('leftUpperArm');
             const rUA = humanoid.getNormalizedBoneNode('rightUpperArm');
-            if (lUA) { lUA.rotation.z = -Math.PI * 1.1; lUA.rotation.x = -armSwing; }
-            if (rUA) { rUA.rotation.z =  Math.PI * 1.1; rUA.rotation.x =  armSwing; }
+            if (lUA) { lUA.rotation.z = -Math.PI * 1.5; lUA.rotation.x = -armSwing; }
+            if (rUA) { rUA.rotation.z =  Math.PI * 1.5; rUA.rotation.x =  armSwing; }
 
             // 足の振り
             const lUL = humanoid.getNormalizedBoneNode('leftUpperLeg');
