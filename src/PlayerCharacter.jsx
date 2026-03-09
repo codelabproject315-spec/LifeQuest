@@ -4,7 +4,7 @@ import * as maplibregl from 'maplibre-gl';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-const PlayerCharacter = ({ map, lat, lng }) => {
+const PlayerCharacter = ({ map, lat, lng, bearing }) => {
   const vrmRef = useRef(null);
   const mixerRef = useRef(null);
   const clockRef = useRef(new THREE.Clock());
@@ -38,6 +38,7 @@ const PlayerCharacter = ({ map, lat, lng }) => {
           // モデルのサイズ調整（地図のスケールに合わせる）
           vrm.scene.scale.set(15, 15, 15);
           vrm.scene.rotation.x = Math.PI / 2; // 立たせる
+          vrm.scene.rotation.z = -(bearing ?? 0) * (Math.PI / 180); // 向き
           
 
         });
@@ -51,6 +52,11 @@ const PlayerCharacter = ({ map, lat, lng }) => {
       },
       render: function (gl, matrix) {
         if (!vrmRef.current) return;
+
+        // キャラの向きをマップのbearingに同期
+        if (vrmRef.current) {
+          vrmRef.current.scene.rotation.z = -(bearing ?? 0) * (Math.PI / 180);
+        }
 
         // ✅ 緯度経度をMapLibreのメルカトル座標に変換してモデルを正しい位置に配置
         const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng ?? 0, lat: lat ?? 0 }, 0);
@@ -77,8 +83,8 @@ const PlayerCharacter = ({ map, lat, lng }) => {
             // 腕の振り
             const lUA = humanoid.getNormalizedBoneNode('leftUpperArm');
             const rUA = humanoid.getNormalizedBoneNode('rightUpperArm');
-            if (lUA) { lUA.rotation.z = -Math.PI * 1.5; lUA.rotation.x = -armSwing; }
-            if (rUA) { rUA.rotation.z =  Math.PI * 1.5; rUA.rotation.x =  armSwing; }
+            if (lUA) { lUA.rotation.z = -Math.PI * 1.1; lUA.rotation.x = -armSwing; }
+            if (rUA) { rUA.rotation.z =  Math.PI * 1.1; rUA.rotation.x =  armSwing; }
 
             // 足の振り
             const lUL = humanoid.getNormalizedBoneNode('leftUpperLeg');
