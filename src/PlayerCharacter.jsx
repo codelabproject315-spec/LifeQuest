@@ -39,16 +39,7 @@ const PlayerCharacter = ({ map, lat, lng }) => {
           vrm.scene.scale.set(15, 15, 15);
           vrm.scene.rotation.x = Math.PI / 2; // 立たせる
           
-          // Tポーズ解除：両腕を下げる
-          const humanoid = vrm.humanoid;
-          if (humanoid) {
-            // 左腕を下げる（Z軸で-70度）
-            const leftUpperArm = humanoid.getNormalizedBoneNode('leftUpperArm');
-            if (leftUpperArm) leftUpperArm.rotation.z = Math.PI * 0.7;
-            // 右腕を下げる（Z軸で+70度）
-            const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
-            if (rightUpperArm) rightUpperArm.rotation.z = +Math.PI * 0.7;
-          }
+
         });
 
         this.renderer = new THREE.WebGLRenderer({
