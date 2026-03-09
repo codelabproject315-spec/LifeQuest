@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import * as maplibregl from 'maplibre-gl';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-const PlayerCharacter = ({ map }) => {
+const PlayerCharacter = ({ map, lat, lng }) => {
   const vrmRef = useRef(null);
   const mixerRef = useRef(null);
   const clockRef = useRef(new THREE.Clock());
@@ -50,9 +51,15 @@ const PlayerCharacter = ({ map }) => {
       render: function (gl, matrix) {
         if (!vrmRef.current) return;
 
-        // MapLibreの行列をThree.jsのカメラに同期
+        // ✅ 緯度経度をMapLibreのメルカトル座標に変換してモデルを正しい位置に配置
+        const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng ?? 0, lat: lat ?? 0 }, 0);
+        const scale = mc.meterInMercatorCoordinateUnits();
+        const modelMatrix = new THREE.Matrix4()
+          .makeTranslation(mc.x, mc.y, mc.z)
+          .scale(new THREE.Vector3(scale * 15, -scale * 15, scale * 15));
+
         const m = new THREE.Matrix4().fromArray(matrix);
-        this.camera.projectionMatrix = m;
+        this.camera.projectionMatrix = m.multiply(modelMatrix);
         
         // アニメーションの更新（将来用）
         const delta = clockRef.current.getDelta();
