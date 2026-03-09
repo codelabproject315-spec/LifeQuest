@@ -24,9 +24,11 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     map.on('load', () => {
       setMapInstance(map);
       // 3D建物などの共通レイヤー設定
+      const sources = map.getStyle().sources;
+      const buildingSource = Object.keys(sources).find(k => sources[k].type === 'vector') ?? 'openmaptiles';
       map.addLayer({
         'id': '3d-buildings',
-        'source': 'openmaptiles',
+        'source': buildingSource,
         'source-layer': 'building',
         'type': 'fill-extrusion',
         'minzoom': 15,
@@ -53,7 +55,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
       
       {/* 3Dキャラクターを地図に重ねる */}
-      {mapInstance && <PlayerCharacter map={mapInstance} />}
+      {mapInstance && <PlayerCharacter map={mapInstance} lat={activeLocation?.lat ?? QUEST_LAT} lng={activeLocation?.lng ?? QUEST_LNG} />}
 
       {/* 現在地ボタンなどのUI */}
       <button 
