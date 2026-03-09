@@ -1337,7 +1337,7 @@ export default function App() {
           </div>
         )}
         {activeTab === 'map' && (
-          <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 180px)' }}>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 10 }}>
             <MapTab quests={quests} userLocation={userLocation} gpsStatus={gpsStatus} mockOffset={mockOffset} setMockOffset={setMockOffset} QUEST_LAT={QUEST_LAT} QUEST_LNG={QUEST_LNG} />
           </div>
         )}
