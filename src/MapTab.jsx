@@ -232,7 +232,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             leafletMap.current?.setView([activeLocation.lat, activeLocation.lng], 16, { animate: true });
           }}
           style={{
-            position: 'absolute', bottom: 190, right: 16, zIndex: 500,
+            position: 'absolute', bottom: 190, right: 40, zIndex: 500,
             width: 42, height: 42, borderRadius: '50%',
             background: 'white', border: 'none',
             boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
