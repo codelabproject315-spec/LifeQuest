@@ -1337,7 +1337,7 @@ export default function App() {
           </div>
         )}
         {activeTab === 'map' && (
-      <div className="absolute inset-0 w-full h-full"> 
+      <div className="absolute inset-0 w-full h-full z-0"> 
         <MapTab 
           quests={quests} 
           userLocation={userLocation} 
