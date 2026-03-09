@@ -1337,7 +1337,7 @@ export default function App() {
           </div>
         )}
         {activeTab === 'map' && (
-      <div className="absolute inset-0 w-full" style={{ height: 'calc(100% - 80px)' }}>
+      <div className="absolute inset-0 w-full h-full"> 
         <MapTab 
           quests={quests} 
           userLocation={userLocation} 
