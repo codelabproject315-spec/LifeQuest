@@ -1337,10 +1337,18 @@ export default function App() {
           </div>
         )}
         {activeTab === 'map' && (
-          <div style={{ height: 'calc(100% - 96px)' }}>
-            <MapTab quests={quests} userLocation={userLocation} gpsStatus={gpsStatus} mockOffset={mockOffset} setMockOffset={setMockOffset} QUEST_LAT={QUEST_LAT} QUEST_LNG={QUEST_LNG} />
-          </div>
-        )}
+      <div className="absolute inset-0 w-full" style={{ height: 'calc(100% - 80px)' }}>
+        <MapTab 
+          quests={quests} 
+          userLocation={userLocation} 
+          gpsStatus={gpsStatus} 
+          mockOffset={mockOffset} 
+          setMockOffset={setMockOffset} 
+          QUEST_LAT={QUEST_LAT} 
+          QUEST_LNG={QUEST_LNG} 
+          />
+      </div>
+    )}
         {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} />}
         {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} />}
         {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} />}
