@@ -36,7 +36,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
           vrmRef.current = vrm;
 
           // モデルのサイズ調整（地図のスケールに合わせる）
-          vrm.scene.scale.set(1, 1, 1);
+          vrm.scene.scale.set(15, 15, 15);
           vrm.scene.rotation.x = Math.PI / 2; // 立たせる
           vrm.scene.rotation.z = -(bearing ?? 0) * (Math.PI / 180); // 向き
           
