@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Navigation, X } from 'lucide-react';
-import maplibregl from 'maplibre-gl'; // 👈 ここを追加
+import * as maplibregl from 'maplibre-gl'; // // 👈 ここを追加
 import 'maplibre-gl/dist/maplibre-gl.css'; // 👈 スタイルもインポート
 import PlayerCharacter from './PlayerCharacter.jsx'; // 新しいファイルをインポート
 
