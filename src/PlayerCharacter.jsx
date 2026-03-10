@@ -98,7 +98,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
         const scale = mc.meterInMercatorCoordinateUnits();
         const modelMatrix = new THREE.Matrix4()
           .makeTranslation(mc.x, mc.y, mc.z)
-          .scale(new THREE.Vector3(scale * 3, -scale * 3, scale * 3));
+          .scale(new THREE.Vector3(scale * 2, -scale * 2, scale * 2));
 
         const m = new THREE.Matrix4().fromArray(matrix);
         this.camera.projectionMatrix = m.multiply(modelMatrix);
