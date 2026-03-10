@@ -22,11 +22,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
-      zoom: 17,
-      pitch: 68,
-      bearing: 0, // 常に北向き固定
+      zoom: 18,
+      pitch: 72,
+      bearing: 0,
       antialias: true,
-      padding: { top: 200, bottom: 100, left: 0, right: 0 }
     });
     mapInstanceRef.current = map;
 
@@ -35,7 +34,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       // ロード完了後も現在地にjumpTo（アニメーションなし）
       const loc = activeLocationRef.current;
       if (loc) {
-        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 17 });
+        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 18, pitch: 72 });
       }
       // リアルタイム再描画（キャラアニメーション用）
       const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
@@ -101,9 +100,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     if (mapInstance && activeLocation) {
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
-        zoom: 17,
-        pitch: 68,
-        padding: { top: 200, bottom: 100, left: 0, right: 0 },
+        zoom: 18,
+        pitch: 72,
+        offset: [0, 150],
         duration: 800,
         easing: (t) => t
       });
