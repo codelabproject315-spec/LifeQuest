@@ -4,7 +4,7 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
 
-const MAP_ZOOM = 18;
+const MAP_ZOOM = 17;
 const MAP_PITCH = 85;
 
 const POI_LABELS = {
@@ -46,7 +46,7 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
       style={{ background: 'rgba(0,0,0,0.45)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-10 shadow-2xl">
+      <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-28 shadow-2xl">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div
