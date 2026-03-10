@@ -22,8 +22,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
-      zoom: 18,
-      pitch: 60,
+      zoom: 17,
+      pitch: 68,
       bearing: 0, // 常に北向き固定
       antialias: true,
       padding: { top: 0, bottom: 400, left: 0, right: 0 }
@@ -101,8 +101,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     if (mapInstance && activeLocation) {
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
-        zoom: 18,
-        pitch: 60,
+        zoom: 17,
+        pitch: 68,
+        padding: { top: 0, bottom: 400, left: 0, right: 0 },
         duration: 800,
         easing: (t) => t
       });
