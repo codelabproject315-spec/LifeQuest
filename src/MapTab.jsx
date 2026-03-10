@@ -22,8 +22,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
-      zoom: 17,
-      pitch: 85,
+      zoom: 18,
+      pitch: 80,
       bearing: 0,
       antialias: true,
     });
@@ -56,6 +56,22 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           }
         });
       } catch (e) { console.warn('3d-buildings layer error:', e); }
+
+      // 建物の輪郭線（ポケGo風）
+      try {
+        map.addLayer({
+          'id': 'building-outline',
+          'source': buildingSource,
+          'source-layer': 'building',
+          'type': 'line',
+          'minzoom': 15,
+          'paint': {
+            'line-color': '#ffffff',
+            'line-width': 2,
+            'line-opacity': 0.8,
+          }
+        });
+      } catch (e) { console.warn('building-outline error:', e); }
 
       // ポケGoっぽい色合いに変更
       const paintMap = {
@@ -101,7 +117,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
         zoom: 17,
-        pitch: 85,
+        pitch: 70,
         offset: [0, 80],
         duration: 800,
         easing: (t) => t
