@@ -45,7 +45,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
       const loc2 = activeLocationRef.current;
+      console.log('[POI] loc2:', loc2);
       if (loc2) fetchAndPlacePOI(map, loc2.lat, loc2.lng);
+      else fetchAndPlacePOI(map, QUEST_LAT, QUEST_LNG);
       // 3D建物レイヤー
       const sources = map.getStyle().sources;
       const buildingSource = Object.keys(sources).find(k => sources[k].type === 'vector') ?? 'openmaptiles';
@@ -123,6 +125,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
+    console.log('[POI] fetch開始 lat:', lat, 'lng:', lng);
     const radius = 1000; // 半径500m
     const query = `
       [out:json][timeout:10];
