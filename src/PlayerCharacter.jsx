@@ -14,18 +14,17 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
 
   // propsが変わるたびにrefを更新 & 進行方向を計算
   useEffect(() => {
-    console.log('[heading] lat:', lat, 'lng:', lng, 'dLat:', lat - latRef.current, 'dLng:', lng - lngRef.current); // ← これを追加
     const dLat = lat - latRef.current;
     const dLng = lng - lngRef.current;
     // 5m以上移動した場合のみ向きを更新（ノイズ対策）
     const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-    if (dist > 0.00001) {
-      const newHeading = Math.atan2(dLat, dLng);
+    if (dist > 0.00005) {
+      const newHeading = Math.atan2(dLng, dLat);
       if (headingRef.current === null) {
         headingRef.current = newHeading;
       } else {
         // ローパスフィルター: 急激な回転を抑える
-        headingRef.current = headingRef.current * 0.30 + newHeading * 0.60;
+        headingRef.current = headingRef.current * 0.6 + newHeading * 0.4;
       }
     }
     latRef.current = lat;
@@ -143,15 +142,21 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
     };
 
     // 既存レイヤーを削除してから追加（再マウント対策）
-    if (map.getLayer('vrm-player-layer')) {
-      map.removeLayer('vrm-player-layer');
-    }
-    map.addLayer(vrmLayer);
-
-    return () => {
-      if (map.getLayer('vrm-player-layer')) {
+    try {
+      if (map && map.getLayer && map.getLayer('vrm-player-layer')) {
         map.removeLayer('vrm-player-layer');
       }
+      map.addLayer(vrmLayer);
+    } catch (e) {
+      console.warn('[VRM] addLayer error:', e);
+    }
+
+    return () => {
+      try {
+        if (map && map.getLayer && map.getLayer('vrm-player-layer')) {
+          map.removeLayer('vrm-player-layer');
+        }
+      } catch (e) {}
     };
   }, [map]);
 
