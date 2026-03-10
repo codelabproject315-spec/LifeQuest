@@ -26,7 +26,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       pitch: 60,
       bearing: 0, // 常に北向き固定
       antialias: true,
-      padding: { top: 0, bottom: 300, left: 0, right: 0 }
+      padding: { top: 0, bottom: 400, left: 0, right: 0 }
     });
     mapInstanceRef.current = map;
 
@@ -35,7 +35,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       // ロード完了後も現在地にjumpTo（アニメーションなし）
       const loc = activeLocationRef.current;
       if (loc) {
-        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 16 });
+        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 17 });
       }
       // リアルタイム再描画（キャラアニメーション用）
       const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
