@@ -58,18 +58,34 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         });
       } catch (e) { console.warn('3d-buildings layer error:', e); }
 
-      // 道路を太くする
-      const roadLayers = map.getStyle().layers.filter(l => l['source-layer'] === 'transportation');
-      roadLayers.forEach(l => {
-        try {
-          if (l.type === 'line') {
-            map.setPaintProperty(l.id, 'line-width', [
-              'interpolate', ['exponential', 1.5], ['zoom'],
-              10, ['*', ['get', 'width'], 3],
-              16, 20
-            ]);
-          }
-        } catch (e) {}
+      // ポケGoっぽい色合いに変更
+      const paintMap = {
+        'background':            [['background-color', '#b8e4e0']],
+        'landcover':             [['fill-color', '#b8e4e0']],
+        'landuse':               [['fill-color', '#6db87f']],
+        'landuse_residential':   [['fill-color', '#c8e8c0']],
+        'park_national_park':    [['fill-color', '#5a9e6f']],
+        'park_nature_reserve':   [['fill-color', '#5a9e6f']],
+        'water':                 [['fill-color', '#4ab8d4']],
+        'road_service_fill':     [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,1,16,10]]],
+        'road_minor_fill':       [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,16,16]]],
+        'road_sec_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,16,20]]],
+        'road_pri_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,16,24]]],
+        'road_trunk_fill_noramp':[['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,16,26]]],
+        'road_mot_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,16,28]]],
+        'road_service_case':     [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,16,14]]],
+        'road_minor_case':       [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,16,20]]],
+        'road_sec_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,16,24]]],
+        'road_pri_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,16,28]]],
+        'road_trunk_case_noramp':[['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,16,30]]],
+        'road_mot_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,6,16,32]]],
+        'building':              [['fill-color', '#9edede'], ['fill-outline-color', '#4ab3b3']],
+        'building-top':          [['fill-color', '#7ecfcf'], ['fill-outline-color', '#4ab3b3']],
+      };
+      Object.entries(paintMap).forEach(([id, props]) => {
+        props.forEach(([prop, val]) => {
+          try { map.setPaintProperty(id, prop, val); } catch(e) { console.warn('[PAINT ERROR]', id, prop, e.message); }
+        });
       });
     });
 
