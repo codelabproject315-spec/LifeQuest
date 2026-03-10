@@ -158,9 +158,11 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     }
     try {
       if (!data) { console.warn('[POI] 全エンドポイント失敗'); return; }
+      console.log('[POI] elements:', data.elements);
       data.elements.forEach(el => {
         const elLat = el.lat ?? el.center?.lat;
         const elLng = el.lon ?? el.center?.lon;
+        console.log('[POI] el:', el.type, elLat, elLng, el.tags);
         if (!elLat || !elLng) return;
 
         const type = el.tags?.leisure === 'park' ? 'park' : 'shop';
