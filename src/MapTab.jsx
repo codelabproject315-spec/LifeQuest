@@ -140,12 +140,28 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       );
       out center 20;
     `;
+    const endpoints = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+    ];
+    let data = null;
+    for (const endpoint of endpoints) {
+      try {
+        console.log('[POI] 試行:', endpoint);
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          body: query,
+          signal: AbortSignal.timeout(8000)
+        });
+        data = await res.json();
+        console.log('[POI] 取得件数:', data.elements?.length);
+        break;
+      } catch(e) {
+        console.warn('[POI] 失敗:', endpoint, e.message);
+      }
+    }
     try {
-      const res = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: query
-      });
-      const data = await res.json();
+      if (!data) { console.warn('[POI] 全エンドポイント失敗'); return; }
       data.elements.forEach(el => {
         const elLat = el.lat ?? el.center?.lat;
         const elLng = el.lon ?? el.center?.lon;
