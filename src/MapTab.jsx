@@ -29,6 +29,8 @@ const getPOIType = (tags) => {
 // ── POIクエスト完了モーダル ──────────────────────────────────
 const POIQuestModal = ({ poi, onComplete, onClose }) => {
   const [status, setStatus] = useState('idle');
+  const xp = poi.xp ?? 20;
+  const info = POI_LABELS[poi.poiType] ?? POI_LABELS.mall;
 
   const handleComplete = () => {
     setStatus('done');
@@ -38,9 +40,6 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
     }, 1400);
   };
 
-  const xp = poi.xp ?? 20;
-  const info = POI_LABELS[poi.poiType] ?? POI_LABELS.mall;
-
   return (
     <div
       className="fixed inset-0 z-[200] flex items-end justify-center"
@@ -48,7 +47,6 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-10 shadow-2xl">
-        {/* ヘッダー */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div
@@ -69,16 +67,11 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
               </h2>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-full bg-slate-100 text-slate-400 active:scale-90 transition-transform"
-          >
+          <button type="button" onClick={onClose} className="p-2 rounded-full bg-slate-100 text-slate-400 active:scale-90 transition-transform">
             <X size={18} />
           </button>
         </div>
 
-        {/* 場所情報 */}
         <div className="bg-slate-50 rounded-2xl px-4 py-3 mb-4 flex items-center gap-2 text-left">
           <MapPin size={14} className="text-slate-400 shrink-0" />
           <p className="text-xs text-slate-500 font-bold">
@@ -86,33 +79,22 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
           </p>
         </div>
 
-        {/* クエスト内容 */}
         <div className="border-2 border-indigo-100 rounded-2xl p-4 mb-5 text-left bg-indigo-50/50">
           <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider mb-1">📍 位置クエスト</p>
-          <p className="font-bold text-sm text-slate-700">
-            {info.label}エリアに足を運ぶ
-          </p>
+          <p className="font-bold text-sm text-slate-700">{info.label}エリアに足を運ぶ</p>
           <div className="flex items-center gap-1 mt-2 text-amber-500 font-black text-sm">
-            <Zap size={14} />
-            <span>+{xp} XP</span>
+            <Zap size={14} /><span>+{xp} XP</span>
           </div>
         </div>
 
-        {/* ボタン */}
         {status === 'idle' && (
-          <button
-            type="button"
-            onClick={handleComplete}
-            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-base active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg"
-          >
-            <CheckCircle2 size={20} />
-            クエストを完了する
+          <button type="button" onClick={handleComplete} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-base active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg">
+            <CheckCircle2 size={20} />クエストを完了する
           </button>
         )}
         {status === 'done' && (
           <div className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 shadow-lg">
-            <CheckCircle2 size={20} />
-            達成認定！ +{xp} XP 🎉
+            <CheckCircle2 size={20} />達成認定！ +{xp} XP 🎉
           </div>
         )}
       </div>
@@ -127,6 +109,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const mapInstanceRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
   const [selectedPOI, setSelectedPOI] = useState(null);
+
+  // useEffect内のクロージャからsetSelectedPOIを呼ぶためrefで保持
+  const setSelectedPOIRef = useRef(null);
+  setSelectedPOIRef.current = setSelectedPOI;
 
   const activeLocation = userLocation || (gpsStatus === 'mock'
     ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG }
@@ -161,7 +147,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
 
-      // ── POI取得（インライン）──────────────────────────────
+      // ── POI取得 ──────────────────────────────────────────
       const poiLat = activeLocationRef.current?.lat ?? QUEST_LAT;
       const poiLng = activeLocationRef.current?.lng ?? QUEST_LNG;
 
@@ -190,9 +176,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         try {
           console.log('[POI] fetch開始 lat:', poiLat, 'lng:', poiLng);
           const res = await fetch('https://maps.mail.ru/osm/tools/overpass/api/interpreter', {
-            method: 'POST',
-            body: query,
-            signal: AbortSignal.timeout(15000),
+            method: 'POST', body: query, signal: AbortSignal.timeout(15000),
           });
           data = await res.json();
           console.log('[POI] 取得件数:', data.elements?.length);
@@ -212,21 +196,28 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
           const pinEl = document.createElement('div');
           pinEl.style.cssText = `
-            width: 40px; height: 40px;
+            width: 40px;
+            height: 40px;
             background: ${info.color};
             border: 3px solid white;
             border-radius: 50% 50% 50% 0;
             transform: rotate(-45deg);
             box-shadow: 0 3px 8px rgba(0,0,0,0.35);
             cursor: pointer;
+            position: relative;
+            z-index: 10;
             transition: transform 0.15s, box-shadow 0.15s;
           `;
           const inner = document.createElement('div');
           inner.style.cssText = `
-            width: 100%; height: 100%;
-            display: flex; align-items: center; justify-content: center;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transform: rotate(45deg);
             font-size: 18px;
+            pointer-events: none;
           `;
           inner.textContent = info.emoji;
           pinEl.appendChild(inner);
@@ -241,7 +232,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           });
           pinEl.addEventListener('click', (e) => {
             e.stopPropagation();
-            setSelectedPOI({
+            setSelectedPOIRef.current({
               poiType,
               name: el.tags?.name ?? null,
               lat: elLat,
