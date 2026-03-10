@@ -213,19 +213,17 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           const poiType = getPOIType(el.tags);
           const info = POI_LABELS[poiType];
 
-          // ── ピンのラッパー（固定サイズ・変形しない） ──
+          // ピンのDOM（pointer-events:noneでMapLibreに触らせない）
           const wrapper = document.createElement('div');
           wrapper.style.cssText = `
             width: 40px;
             height: 48px;
             position: relative;
-            cursor: pointer;
+            pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none;
           `;
 
-          // ピン本体（水滴型）
           const pinEl = document.createElement('div');
           pinEl.style.cssText = `
             width: 36px;
@@ -239,10 +237,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             position: absolute;
             top: 0;
             left: 2px;
-            will-change: transform;
           `;
 
-          // 絵文字（ピン内側）
           const inner = document.createElement('div');
           inner.style.cssText = `
             width: 100%;
@@ -252,13 +248,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             justify-content: center;
             transform: rotate(45deg);
             font-size: 17px;
-            pointer-events: none;
-            user-select: none;
           `;
           inner.textContent = info.emoji;
           pinEl.appendChild(inner);
 
-          // ピンの先端（三角の下部分）
           const tip = document.createElement('div');
           tip.style.cssText = `
             width: 0;
@@ -269,42 +262,34 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             position: absolute;
             bottom: 2px;
             left: 13px;
-            pointer-events: none;
           `;
 
           wrapper.appendChild(pinEl);
           wrapper.appendChild(tip);
 
-          // タッチ・クリックでモーダルを開く（移動は一切させない）
-          const openModal = (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setSelectedPOIRef.current({
-              poiType,
-              name: el.tags?.name ?? null,
-              lat: elLat,
-              lng: elLng,
-              xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
-            });
-          };
-          wrapper.addEventListener('click', openModal);
-          wrapper.addEventListener('touchend', openModal, { passive: false });
-
-          // ホバー演出（PCのみ）
-          wrapper.addEventListener('mouseenter', () => {
-            pinEl.style.transform = 'rotate(-45deg) scale(1.15)';
-            pinEl.style.boxShadow = '0 5px 14px rgba(0,0,0,0.45)';
-          });
-          wrapper.addEventListener('mouseleave', () => {
-            pinEl.style.transform = 'rotate(-45deg) scale(1)';
-            pinEl.style.boxShadow = '0 3px 8px rgba(0,0,0,0.35)';
+          // マップのclickイベントでピン付近をタップ検知
+          map.on('click', (e) => {
+            const markerPos = map.project([elLng, elLat]);
+            const clickPos = e.point;
+            const dist = Math.sqrt(
+              Math.pow(markerPos.x - clickPos.x, 2) +
+              Math.pow(markerPos.y - clickPos.y, 2)
+            );
+            if (dist < 30) {
+              setSelectedPOIRef.current({
+                poiType,
+                name: el.tags?.name ?? null,
+                lat: elLat,
+                lng: elLng,
+                xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
+              });
+            }
           });
 
-          // draggable: false で絶対にドラッグされないようにする
           const marker = new maplibregl.Marker({
             element: wrapper,
             draggable: false,
-            anchor: 'bottom',   // ピンの底を座標に合わせる
+            anchor: 'bottom',
           })
             .setLngLat([elLng, elLat])
             .addTo(map);
