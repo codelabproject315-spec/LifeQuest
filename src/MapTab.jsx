@@ -189,6 +189,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         const marker = new maplibregl.Marker({ element: el2 })
           .setLngLat([elLng, elLat])
           .addTo(map);
+        console.log('[POI] マーカー追加:', elLng, elLat);
         markersRef.current.push(marker);
       });
     } catch(e) {
