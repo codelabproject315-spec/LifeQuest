@@ -150,21 +150,12 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
 
-      // 手動操作の検知（ドラッグ・ピンチ・スクロール）
+      // 手動操作したら追従を永久にオフ（現在地ボタンで手動復帰）
       const onInteractStart = () => {
         userIsInteractingRef.current = true;
-        if (interactingTimerRef.current) clearTimeout(interactingTimerRef.current);
-      };
-      const onInteractEnd = () => {
-        // 操作終了から3秒後に追従を再開
-        interactingTimerRef.current = setTimeout(() => {
-          userIsInteractingRef.current = false;
-        }, 3000);
       };
       map.on('dragstart', onInteractStart);
       map.on('touchstart', onInteractStart);
-      map.on('dragend', onInteractEnd);
-      map.on('touchend', onInteractEnd);
 
       // ── POI取得 ──────────────────────────────────────────
       const poiLat = activeLocationRef.current?.lat ?? QUEST_LAT;
@@ -204,6 +195,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         }
 
         if (!data) return;
+
+        // POIデータを配列で保持
+        const poiDataList = [];
 
         data.elements.forEach(el => {
           const elLat = el.lat ?? el.center?.lat;
@@ -267,35 +261,44 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           wrapper.appendChild(pinEl);
           wrapper.appendChild(tip);
 
-          // マップのclickイベントでピン付近をタップ検知
-          map.on('click', (e) => {
-            const markerPos = map.project([elLng, elLat]);
-            const clickPos = e.point;
-            const dist = Math.sqrt(
-              Math.pow(markerPos.x - clickPos.x, 2) +
-              Math.pow(markerPos.y - clickPos.y, 2)
-            );
-            if (dist < 30) {
-              setSelectedPOIRef.current({
-                poiType,
-                name: el.tags?.name ?? null,
-                lat: elLat,
-                lng: elLng,
-                xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
-              });
-            }
-          });
-
           const marker = new maplibregl.Marker({
             element: wrapper,
             draggable: false,
             anchor: 'bottom',
+            pitchAlignment: 'map',
+            rotationAlignment: 'map',
           })
             .setLngLat([elLng, elLat])
             .addTo(map);
 
           console.log('[POI] マーカー追加:', elLng, elLat);
           markersRef.current.push(marker);
+
+          poiDataList.push({
+            poiType,
+            name: el.tags?.name ?? null,
+            lat: elLat,
+            lng: elLng,
+            xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
+          });
+        });
+
+        // clickイベントを1つだけ登録して最近傍のPOIを開く
+        map.on('click', (e) => {
+          let nearest = null;
+          let minDist = 40;
+          poiDataList.forEach(poi => {
+            const markerPos = map.project([poi.lng, poi.lat]);
+            const dist = Math.sqrt(
+              Math.pow(markerPos.x - e.point.x, 2) +
+              Math.pow(markerPos.y - e.point.y, 2)
+            );
+            if (dist < minDist) {
+              minDist = dist;
+              nearest = poi;
+            }
+          });
+          if (nearest) setSelectedPOIRef.current(nearest);
         });
       })();
       // ── POI取得ここまで ──────────────────────────────────
