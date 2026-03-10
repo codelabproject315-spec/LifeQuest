@@ -128,14 +128,19 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     console.log('[POI] fetch開始 lat:', lat, 'lng:', lng);
     const radius = 1000; // 半径500m
     const query = `
-      [out:json][timeout:15];
+      [out:json][timeout:25];
       (
         node["leisure"="park"](around:${radius},${lat},${lng});
+        node["leisure"="garden"](around:${radius},${lat},${lng});
         node["shop"="mall"](around:${radius},${lat},${lng});
-        node["landuse"="retail"](around:${radius},${lat},${lng});
-        node["amenity"="marketplace"](around:${radius},${lat},${lng});
+        node["shop"="supermarket"](around:${radius},${lat},${lng});
+        node["amenity"="school"](around:${radius},${lat},${lng});
+        node["amenity"="hospital"](around:${radius},${lat},${lng});
+        way["leisure"="park"](around:${radius},${lat},${lng});
+        way["landuse"="park"](around:${radius},${lat},${lng});
+        way["shop"="mall"](around:${radius},${lat},${lng});
       );
-      out 20;
+      out center 20;
     `;
     const endpoints = [
       'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
