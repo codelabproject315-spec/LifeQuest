@@ -65,7 +65,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             map.setPaintProperty(l.id, 'line-width', [
               'interpolate', ['exponential', 1.5], ['zoom'],
               10, ['*', ['get', 'width'], 3],
-              18, 30
+              18, 50
             ]);
           }
         } catch (e) {}
