@@ -102,7 +102,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         center: [activeLocation.lng, activeLocation.lat],
         zoom: 18,
         pitch: 72,
-        offset: [0, 150],
+        offset: [0, 50],
         duration: 800,
         easing: (t) => t
       });
