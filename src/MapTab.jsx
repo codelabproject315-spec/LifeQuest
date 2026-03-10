@@ -4,7 +4,7 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
 
-const MAP_ZOOM = 18;
+const MAP_ZOOM = 17;
 const MAP_PITCH = 85;
 
 const POI_LABELS = {
@@ -109,9 +109,13 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const mapInstanceRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
   const [selectedPOI, setSelectedPOI] = useState(null);
+  const [poiList, setPOIList] = useState([]);
+  const [pinPositions, setPinPositions] = useState([]);
 
   const setSelectedPOIRef = useRef(null);
   setSelectedPOIRef.current = setSelectedPOI;
+  const setPOIListRef = useRef(null);
+  setPOIListRef.current = setPOIList;
 
   // ユーザーが手動操作中は追従しない
   const userIsInteractingRef = useRef(false);
@@ -196,84 +200,12 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
         if (!data) return;
 
-        // POIデータを配列で保持
         const poiDataList = [];
-
         data.elements.forEach(el => {
           const elLat = el.lat ?? el.center?.lat;
           const elLng = el.lon ?? el.center?.lon;
           if (!elLat || !elLng) return;
-
           const poiType = getPOIType(el.tags);
-          const info = POI_LABELS[poiType];
-
-          // ピンのDOM（pointer-events:noneでMapLibreに触らせない）
-          const wrapper = document.createElement('div');
-          wrapper.style.cssText = `
-            width: 40px;
-            height: 48px;
-            position: relative;
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-          `;
-
-          const pinEl = document.createElement('div');
-          pinEl.style.cssText = `
-            width: 36px;
-            height: 36px;
-            background: ${info.color};
-            border: 3px solid white;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            transform-origin: center center;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-            position: absolute;
-            top: 0;
-            left: 2px;
-          `;
-
-          const inner = document.createElement('div');
-          inner.style.cssText = `
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transform: rotate(45deg);
-            font-size: 17px;
-          `;
-          inner.textContent = info.emoji;
-          pinEl.appendChild(inner);
-
-          const tip = document.createElement('div');
-          tip.style.cssText = `
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 8px solid ${info.color};
-            position: absolute;
-            bottom: 2px;
-            left: 13px;
-          `;
-
-          wrapper.appendChild(pinEl);
-          wrapper.appendChild(tip);
-
-          const marker = new maplibregl.Marker({
-            element: wrapper,
-            draggable: false,
-            anchor: 'bottom',
-            pitchAlignment: 'map',
-            rotationAlignment: 'map',
-          })
-            .setLngLat([elLng, elLat])
-            .addTo(map);
-
-          console.log('[POI] マーカー追加:', elLng, elLat);
-          markersRef.current.push(marker);
-
           poiDataList.push({
             poiType,
             name: el.tags?.name ?? null,
@@ -282,24 +214,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
           });
         });
+        console.log('[POI] POIリスト:', poiDataList.length);
 
-        // clickイベントを1つだけ登録して最近傍のPOIを開く
-        map.on('click', (e) => {
-          let nearest = null;
-          let minDist = 40;
-          poiDataList.forEach(poi => {
-            const markerPos = map.project([poi.lng, poi.lat]);
-            const dist = Math.sqrt(
-              Math.pow(markerPos.x - e.point.x, 2) +
-              Math.pow(markerPos.y - e.point.y, 2)
-            );
-            if (dist < minDist) {
-              minDist = dist;
-              nearest = poi;
-            }
-          });
-          if (nearest) setSelectedPOIRef.current(nearest);
-        });
+        // Reactステートに渡してオーバーレイで描画
+        setPOIListRef.current(poiDataList);
       })();
       // ── POI取得ここまで ──────────────────────────────────
 
@@ -373,9 +291,92 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     }
   }, [activeLocation, mapInstance]);
 
+  // 毎フレームPOIの画面座標を再計算
+  useEffect(() => {
+    if (!mapInstance || poiList.length === 0) return;
+    const update = () => {
+      setPinPositions(poiList.map(poi => {
+        const p = mapInstance.project([poi.lng, poi.lat]);
+        return { ...poi, x: p.x, y: p.y };
+      }));
+    };
+    update();
+    mapInstance.on('render', update);
+    return () => mapInstance.off('render', update);
+  }, [mapInstance, poiList]);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* POIピンオーバーレイ（毎フレーム座標を更新） */}
+      {pinPositions.map((poi, i) => {
+        const info = POI_LABELS[poi.poiType] ?? POI_LABELS.mall;
+        return (
+          <div
+            key={i}
+            onClick={() => setSelectedPOI(poi)}
+            style={{
+              position: 'absolute',
+              left: poi.x - 20,
+              top: poi.y - 48,
+              width: 40,
+              height: 48,
+              cursor: 'pointer',
+              zIndex: 10,
+            }}
+          >
+            {/* ラベル */}
+            {poi.name && (
+              <div style={{
+                position: 'absolute',
+                top: -20,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0,0,0,0.6)',
+                color: 'white',
+                fontSize: 10,
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                padding: '2px 5px',
+                borderRadius: 4,
+                pointerEvents: 'none',
+              }}>{poi.name}</div>
+            )}
+            {/* ピン本体 */}
+            <div style={{
+              width: 36,
+              height: 36,
+              background: info.color,
+              border: '3px solid white',
+              borderRadius: '50% 50% 50% 0',
+              transform: 'rotate(-45deg)',
+              boxShadow: '0 3px 8px rgba(0,0,0,0.35)',
+              position: 'absolute',
+              top: 0,
+              left: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <div style={{ transform: 'rotate(45deg)', fontSize: 17, pointerEvents: 'none' }}>
+                {info.emoji}
+              </div>
+            </div>
+            {/* 先端 */}
+            <div style={{
+              width: 0, height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: `8px solid ${info.color}`,
+              position: 'absolute',
+              bottom: 2,
+              left: 13,
+              pointerEvents: 'none',
+            }} />
+          </div>
+        );
+      })}
 
       {mapInstance && (
         <PlayerCharacter
