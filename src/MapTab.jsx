@@ -110,7 +110,6 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const [mapInstance, setMapInstance] = useState(null);
   const [selectedPOI, setSelectedPOI] = useState(null);
 
-  // useEffect内のクロージャからsetSelectedPOIを呼ぶためrefで保持
   const setSelectedPOIRef = useRef(null);
   setSelectedPOIRef.current = setSelectedPOI;
 
@@ -194,20 +193,36 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           const poiType = getPOIType(el.tags);
           const info = POI_LABELS[poiType];
 
+          // ── ピンのラッパー（固定サイズ・変形しない） ──
+          const wrapper = document.createElement('div');
+          wrapper.style.cssText = `
+            width: 40px;
+            height: 48px;
+            position: relative;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+          `;
+
+          // ピン本体（水滴型）
           const pinEl = document.createElement('div');
           pinEl.style.cssText = `
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             background: ${info.color};
             border: 3px solid white;
             border-radius: 50% 50% 50% 0;
             transform: rotate(-45deg);
+            transform-origin: center center;
             box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-            cursor: pointer;
-            position: relative;
-            z-index: 10;
-            transition: transform 0.15s, box-shadow 0.15s;
+            position: absolute;
+            top: 0;
+            left: 2px;
+            will-change: transform;
           `;
+
+          // 絵文字（ピン内側）
           const inner = document.createElement('div');
           inner.style.cssText = `
             width: 100%;
@@ -216,22 +231,34 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             align-items: center;
             justify-content: center;
             transform: rotate(45deg);
-            font-size: 18px;
+            font-size: 17px;
             pointer-events: none;
+            user-select: none;
           `;
           inner.textContent = info.emoji;
           pinEl.appendChild(inner);
 
-          pinEl.addEventListener('mouseenter', () => {
-            pinEl.style.transform = 'rotate(-45deg) scale(1.2)';
-            pinEl.style.boxShadow = '0 5px 14px rgba(0,0,0,0.45)';
-          });
-          pinEl.addEventListener('mouseleave', () => {
-            pinEl.style.transform = 'rotate(-45deg) scale(1)';
-            pinEl.style.boxShadow = '0 3px 8px rgba(0,0,0,0.35)';
-          });
-          pinEl.addEventListener('click', (e) => {
+          // ピンの先端（三角の下部分）
+          const tip = document.createElement('div');
+          tip.style.cssText = `
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 8px solid ${info.color};
+            position: absolute;
+            bottom: 2px;
+            left: 13px;
+            pointer-events: none;
+          `;
+
+          wrapper.appendChild(pinEl);
+          wrapper.appendChild(tip);
+
+          // タッチ・クリックでモーダルを開く（移動は一切させない）
+          const openModal = (e) => {
             e.stopPropagation();
+            e.preventDefault();
             setSelectedPOIRef.current({
               poiType,
               name: el.tags?.name ?? null,
@@ -239,11 +266,29 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
               lng: elLng,
               xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
             });
+          };
+          wrapper.addEventListener('click', openModal);
+          wrapper.addEventListener('touchend', openModal, { passive: false });
+
+          // ホバー演出（PCのみ）
+          wrapper.addEventListener('mouseenter', () => {
+            pinEl.style.transform = 'rotate(-45deg) scale(1.15)';
+            pinEl.style.boxShadow = '0 5px 14px rgba(0,0,0,0.45)';
+          });
+          wrapper.addEventListener('mouseleave', () => {
+            pinEl.style.transform = 'rotate(-45deg) scale(1)';
+            pinEl.style.boxShadow = '0 3px 8px rgba(0,0,0,0.35)';
           });
 
-          const marker = new maplibregl.Marker({ element: pinEl })
+          // draggable: false で絶対にドラッグされないようにする
+          const marker = new maplibregl.Marker({
+            element: wrapper,
+            draggable: false,
+            anchor: 'bottom',   // ピンの底を座標に合わせる
+          })
             .setLngLat([elLng, elLat])
             .addTo(map);
+
           console.log('[POI] マーカー追加:', elLng, elLat);
           markersRef.current.push(marker);
         });
