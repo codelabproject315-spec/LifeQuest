@@ -22,8 +22,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
-      zoom: 18,
-      pitch: 80,
+      zoom: 17,
+      pitch: 70,
       bearing: 0,
       antialias: true,
     });
@@ -34,7 +34,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       // ロード完了後も現在地にjumpTo（アニメーションなし）
       const loc = activeLocationRef.current;
       if (loc) {
-        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 16, pitch: 60 });
+        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 17, pitch: 70 });
       }
       // リアルタイム再描画（キャラアニメーション用）
       const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
@@ -82,18 +82,18 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         'park_national_park':    [['fill-color', '#5a9e6f']],
         'park_nature_reserve':   [['fill-color', '#5a9e6f']],
         'water':                 [['fill-color', '#4ab8d4']],
-        'road_service_fill':     [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,1,17,40]]],
-        'road_minor_fill':       [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,17,40]]],
-        'road_sec_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,17,40]]],
-        'road_pri_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,40]]],
-        'road_trunk_fill_noramp':[['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,40]]],
-        'road_mot_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,40]]],
-        'road_service_case':     [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,17,14]]],
-        'road_minor_case':       [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,17,20]]],
-        'road_sec_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,24]]],
-        'road_pri_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,28]]],
-        'road_trunk_case_noramp':[['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,30]]],
-        'road_mot_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,6,17,32]]],
+        'road_service_fill':     [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,1,16,50]]],
+        'road_minor_fill':       [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,16,50]]],
+        'road_sec_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,16,50]]],
+        'road_pri_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,16,50]]],
+        'road_trunk_fill_noramp':[['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,16,50]]],
+        'road_mot_fill_noramp':  [['line-color', '#ffffff'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,16,50]]],
+        'road_service_case':     [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,16,14]]],
+        'road_minor_case':       [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,16,20]]],
+        'road_sec_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,16,24]]],
+        'road_pri_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,16,28]]],
+        'road_trunk_case_noramp':[['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,16,30]]],
+        'road_mot_case_noramp':  [['line-color', '#d4893a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,6,16,32]]],
         'building':              [['fill-color', '#9edede'], ['fill-outline-color', '#4ab3b3']],
         'building-top':          [['fill-color', '#7ecfcf'], ['fill-outline-color', '#4ab3b3']],
       };
