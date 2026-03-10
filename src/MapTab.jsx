@@ -85,7 +85,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         'road_service_fill':     [['line-color', '#d0cfc8'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,1,17,30]]],
         'road_minor_fill':       [['line-color', '#d0cfc8'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,17,30]]],
         'road_sec_fill_noramp':  [['line-color', '#d0cfc8'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,17,30]]],
-        'road_pri_fill_noramp':  [['line-color', '#d0cfc8, ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,30]]],
+        'road_pri_fill_noramp':  [['line-color', '#d0cfc8'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,30]]],
         'road_trunk_fill_noramp':[['line-color', '#d0cfc8'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,30]]],
         'road_mot_fill_noramp':  [['line-color', '#d0cfc8'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,30]]],
         'road_service_case':     [['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,17,40]]],
