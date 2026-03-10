@@ -4,7 +4,7 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
 
-const MAP_ZOOM = 18;
+const MAP_ZOOM = 17;
 const MAP_PITCH = 85;
 
 const POI_LABELS = {
@@ -113,6 +113,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const setSelectedPOIRef = useRef(null);
   setSelectedPOIRef.current = setSelectedPOI;
 
+  // ユーザーが手動操作中は追従しない
+  const userIsInteractingRef = useRef(false);
+  const interactingTimerRef = useRef(null);
+
   const activeLocation = userLocation || (gpsStatus === 'mock'
     ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG }
     : null);
@@ -145,6 +149,22 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
+
+      // 手動操作の検知（ドラッグ・ピンチ・スクロール）
+      const onInteractStart = () => {
+        userIsInteractingRef.current = true;
+        if (interactingTimerRef.current) clearTimeout(interactingTimerRef.current);
+      };
+      const onInteractEnd = () => {
+        // 操作終了から3秒後に追従を再開
+        interactingTimerRef.current = setTimeout(() => {
+          userIsInteractingRef.current = false;
+        }, 3000);
+      };
+      map.on('dragstart', onInteractStart);
+      map.on('touchstart', onInteractStart);
+      map.on('dragend', onInteractEnd);
+      map.on('touchend', onInteractEnd);
 
       // ── POI取得 ──────────────────────────────────────────
       const poiLat = activeLocationRef.current?.lat ?? QUEST_LAT;
@@ -353,7 +373,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
   // カメラ追従
   useEffect(() => {
-    if (mapInstance && activeLocation) {
+    if (mapInstance && activeLocation && !userIsInteractingRef.current) {
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
         zoom: MAP_ZOOM,
