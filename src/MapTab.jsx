@@ -100,9 +100,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     if (mapInstance && activeLocation) {
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
-        zoom: 16,
-        pitch: 60,
-        offset: [0, 0],
+        zoom: 17,
+        pitch: 70,
+        offset: [0, 80],
         duration: 800,
         easing: (t) => t
       });
