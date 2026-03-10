@@ -31,6 +31,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     mapInstanceRef.current = map;
 
     map.on('load', () => {
+      console.log('[MAP LOADED] スタイルレイヤー:', map.getStyle().layers.map(l => l.id));
       // ロード完了後も現在地にjumpTo（アニメーションなし）
       const loc = activeLocationRef.current;
       if (loc) {
