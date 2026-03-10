@@ -4,11 +4,12 @@ import * as maplibregl from 'maplibre-gl'; // // 👈 ここを追加
 import 'maplibre-gl/dist/maplibre-gl.css'; // 👈 スタイルもインポート
 import PlayerCharacter from './PlayerCharacter.jsx'; // 新しいファイルをインポート
 
-const MAP_ZOOM = 18;
+const MAP_ZOOM = 17;
 const MAP_PITCH = 85;
 
 const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
   const mapRef = useRef(null);
+  const markersRef = useRef([]);
   const mapInstanceRef = useRef(null); // 二重初期化防止
   const [mapInstance, setMapInstance] = useState(null);
   const activeLocation = userLocation || (gpsStatus === 'mock' ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG } : null);
@@ -43,6 +44,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
+      const loc2 = activeLocationRef.current;
+      if (loc2) fetchAndPlacePOI(map, loc2.lat, loc2.lng);
       // 3D建物レイヤー
       const sources = map.getStyle().sources;
       const buildingSource = Object.keys(sources).find(k => sources[k].type === 'vector') ?? 'openmaptiles';
@@ -113,6 +116,68 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Overpass APIで周辺POIを取得してマーカーを置く
+  const fetchAndPlacePOI = async (map, lat, lng) => {
+    // 既存マーカーを削除
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+
+    const radius = 1000; // 半径500m
+    const query = `
+      [out:json][timeout:10];
+      (
+        node["leisure"="park"](around:${radius},${lat},${lng});
+        node["landuse"="retail"](around:${radius},${lat},${lng});
+        node["shop"="mall"](around:${radius},${lat},${lng});
+        node["amenity"="marketplace"](around:${radius},${lat},${lng});
+        way["leisure"="park"](around:${radius},${lat},${lng});
+        way["shop"="mall"](around:${radius},${lat},${lng});
+        way["landuse"="retail"](around:${radius},${lat},${lng});
+      );
+      out center 20;
+    `;
+    try {
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: query
+      });
+      const data = await res.json();
+      data.elements.forEach(el => {
+        const elLat = el.lat ?? el.center?.lat;
+        const elLng = el.lon ?? el.center?.lon;
+        if (!elLat || !elLng) return;
+
+        const type = el.tags?.leisure === 'park' ? 'park' : 'shop';
+        const el2 = document.createElement('div');
+        el2.style.cssText = `
+          width: 36px; height: 36px;
+          background: ${type === 'park' ? '#5a9e6f' : '#e8734a'};
+          border: 3px solid white;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          cursor: pointer;
+        `;
+        const inner = document.createElement('div');
+        inner.style.cssText = `
+          width: 100%; height: 100%;
+          display: flex; align-items: center; justify-content: center;
+          transform: rotate(45deg);
+          font-size: 16px;
+        `;
+        inner.textContent = type === 'park' ? '🌳' : '🏬';
+        el2.appendChild(inner);
+
+        const marker = new maplibregl.Marker({ element: el2 })
+          .setLngLat([elLng, elLat])
+          .addTo(map);
+        markersRef.current.push(marker);
+      });
+    } catch(e) {
+      console.warn('[POI] fetch error:', e);
+    }
+  };
 
   // 位置の追従ロジック（ポケGoっぽくキャラの後ろからカメラ追従）
   useEffect(() => {
