@@ -4,7 +4,7 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
 
-const MAP_ZOOM = 17;
+const MAP_ZOOM = 19;
 const MAP_PITCH = 85;
 
 const POI_LABELS = {
