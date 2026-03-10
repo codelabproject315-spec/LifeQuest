@@ -4,6 +4,9 @@ import * as maplibregl from 'maplibre-gl'; // // 👈 ここを追加
 import 'maplibre-gl/dist/maplibre-gl.css'; // 👈 スタイルもインポート
 import PlayerCharacter from './PlayerCharacter.jsx'; // 新しいファイルをインポート
 
+const MAP_ZOOM = 18;
+const MAP_PITCH = 85;
+
 const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null); // 二重初期化防止
@@ -22,8 +25,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       container: mapRef.current,
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
-      zoom: 17,
-      pitch: 85,
+      zoom: MAP_ZOOM,
+      pitch: MAP_PITCH,
       bearing: 0,
       antialias: true,
     });
@@ -116,8 +119,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     if (mapInstance && activeLocation) {
       mapInstance.easeTo({
         center: [activeLocation.lng, activeLocation.lat],
-        zoom: 17,
-        pitch: 85,
+        zoom: MAP_ZOOM,
+        pitch: MAP_PITCH,
         offset: [0, 80],
         duration: 800,
         easing: (t) => t
