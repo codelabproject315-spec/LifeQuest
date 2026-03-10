@@ -138,7 +138,6 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       out 20;
     `;
     const endpoints = [
-      'https://overpass-api.de/api/interpreter',
       'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
     ];
     let data = null;
