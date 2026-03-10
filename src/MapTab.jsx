@@ -26,7 +26,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       pitch: 68,
       bearing: 0, // 常に北向き固定
       antialias: true,
-      padding: { top: 0, bottom: 400, left: 0, right: 0 }
+      padding: { top: 200, bottom: 100, left: 0, right: 0 }
     });
     mapInstanceRef.current = map;
 
@@ -103,7 +103,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         center: [activeLocation.lng, activeLocation.lat],
         zoom: 17,
         pitch: 68,
-        padding: { top: 0, bottom: 400, left: 0, right: 0 },
+        padding: { top: 200, bottom: 100, left: 0, right: 0 },
         duration: 800,
         easing: (t) => t
       });
