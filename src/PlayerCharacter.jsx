@@ -18,8 +18,8 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
     const dLng = lng - lngRef.current;
     // 5m以上移動した場合のみ向きを更新（ノイズ対策）
     const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-    if (dist > 0.00005) {
-      const newHeading = Math.atan2(dLng, dLat);
+    if (dist > 0.00001) {
+      const newHeading = Math.atan2(dLat, dLng);
       if (headingRef.current === null) {
         headingRef.current = newHeading;
       } else {
