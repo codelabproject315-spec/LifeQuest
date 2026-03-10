@@ -23,7 +23,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
       zoom: 18,
-      pitch: 72,
+      pitch: 100,
       bearing: 0,
       antialias: true,
     });
