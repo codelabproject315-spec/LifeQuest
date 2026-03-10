@@ -1,146 +1,166 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Navigation, X } from 'lucide-react';
-import * as maplibregl from 'maplibre-gl'; // // 👈 ここを追加
-import 'maplibre-gl/dist/maplibre-gl.css'; // 👈 スタイルもインポート
-import PlayerCharacter from './PlayerCharacter.jsx'; // 新しいファイルをインポート
+import React, { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import * as maplibregl from 'maplibre-gl';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null); // 二重初期化防止
-  const [mapInstance, setMapInstance] = useState(null);
-  const activeLocation = userLocation || (gpsStatus === 'mock' ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG } : null);
-  const activeLocationRef = useRef(activeLocation);
-  useEffect(() => { activeLocationRef.current = activeLocation; }, [activeLocation]);
+const PlayerCharacter = ({ map, lat, lng, bearing }) => {
+  const vrmRef = useRef(null);
+  const clockRef = useRef(new THREE.Clock());
+  const latRef = useRef(lat);
+  const lngRef = useRef(lng);
+  const bearingRef = useRef(bearing);
+  const headingRef = useRef(null); // nullの間は向き計算をスキップ
+
+  // propsが変わるたびにrefを更新 & 進行方向を計算
+  useEffect(() => {
+    const dLat = lat - latRef.current;
+    const dLng = lng - lngRef.current;
+    // 5m以上移動した場合のみ向きを更新（ノイズ対策）
+    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+    if (dist > 0.00001) {
+      const newHeading = Math.atan2(dLat, dLng);
+      if (headingRef.current === null) {
+        headingRef.current = newHeading;
+      } else {
+        // ローパスフィルター: 急激な回転を抑える
+        headingRef.current = headingRef.current * 0.6 + newHeading * 0.4;
+      }
+    }
+    latRef.current = lat;
+    lngRef.current = lng;
+    bearingRef.current = bearing;
+  }, [lat, lng, bearing]);
 
   useEffect(() => {
-    if (mapInstanceRef.current) return; // 二重初期化を確実に防ぐ
+    if (!map) return;
 
-    const initLng = activeLocationRef.current?.lng ?? QUEST_LNG;
-    const initLat = activeLocationRef.current?.lat ?? QUEST_LAT;
+    const vrmLayer = {
+      id: 'vrm-player-layer',
+      type: 'custom',
+      renderingMode: '3d',
 
-    const map = new maplibregl.Map({
-      container: mapRef.current,
-      style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: [initLng, initLat], // 最初から現在地にセット（ラグなし）
-      zoom: 17,
-      pitch: 85,
-      bearing: 0,
-      antialias: true,
-    });
-    mapInstanceRef.current = map;
+      onAdd: function (map, gl) {
+        this.camera = new THREE.PerspectiveCamera();
+        this.scene = new THREE.Scene();
 
-    map.on('load', () => {
-      console.log('[MAP LOADED] スタイルレイヤー:', map.getStyle().layers.map(l => l.id));
-      // ロード完了後も現在地にjumpTo（アニメーションなし）
-      const loc = activeLocationRef.current;
-      if (loc) {
-        map.jumpTo({ center: [loc.lng, loc.lat], zoom: 17, pitch: 70 });
+        const light = new THREE.DirectionalLight(0xffffff, 1.0);
+        light.position.set(0, -1, 1).normalize();
+        this.scene.add(light);
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMLoaderPlugin(parser));
+
+        console.log('[VRM] 読み込み開始');
+        loader.load(
+          '/model.vrm',
+          (gltf) => {
+            console.log('[VRM] 読み込み成功');
+            const vrm = gltf.userData.vrm;
+            VRMUtils.rotateVRM0(vrm);
+            this.scene.add(vrm.scene);
+            vrmRef.current = vrm;
+            vrm.scene.scale.set(10, 10, 10);
+          },
+          (progress) => {
+            if (progress.total > 0) console.log('[VRM] 進捗:', Math.round(progress.loaded / progress.total * 100) + '%');
+          },
+          (error) => {
+            console.error('[VRM] 読み込みエラー:', error);
+          }
+        );
+
+        this.renderer = new THREE.WebGLRenderer({
+          canvas: map.getCanvas(),
+          context: gl,
+          antialias: true
+        });
+        this.renderer.autoClear = false;
+      },
+
+      render: function (gl, matrix) {
+        if (!vrmRef.current) return;
+
+        // Quaternionで回転を合成（オイラー角干渉を回避）
+        // 1. まずX軸で90度回転して立たせる
+        const qStand = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+        // 2. Z軸で進行方向+bearingを回転
+        const bearingRad = -(bearingRef.current ?? 0) * (Math.PI / 180);
+        const qFacing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (headingRef.current ?? 0) + bearingRad);
+        // 合成してセット
+        vrmRef.current.scene.quaternion.copy(qFacing.multiply(qStand));
+
+        // 緯度経度 → メルカトル座標変換
+        const mc = maplibregl.MercatorCoordinate.fromLngLat(
+          { lng: lngRef.current ?? 0, lat: latRef.current ?? 0 }, 0
+        );
+        const scale = mc.meterInMercatorCoordinateUnits();
+        const modelMatrix = new THREE.Matrix4()
+          .makeTranslation(mc.x, mc.y, mc.z)
+          .scale(new THREE.Vector3(scale * 3, -scale * 3, scale * 3));
+
+        const m = new THREE.Matrix4().fromArray(matrix);
+        this.camera.projectionMatrix = m.multiply(modelMatrix);
+
+        // アニメーション更新
+        const delta = clockRef.current.getDelta();
+        const elapsed = clockRef.current.elapsedTime;
+        vrmRef.current.update(delta);
+        const humanoid = vrmRef.current.humanoid;
+        if (humanoid) {
+          const t = elapsed * 2.5;
+          const armSwing = Math.sin(t) * 0.5;
+          const legSwing = Math.sin(t) * 0.4;
+          const bodyBob = Math.abs(Math.sin(t)) * 0.03;
+
+          const lUA = humanoid.getNormalizedBoneNode('leftUpperArm');
+          const rUA = humanoid.getNormalizedBoneNode('rightUpperArm');
+          if (lUA) { lUA.rotation.z = -Math.PI * 1.5; lUA.rotation.x = -armSwing; }
+          if (rUA) { rUA.rotation.z =  Math.PI * 1.5; rUA.rotation.x =  armSwing; }
+
+          const lUL = humanoid.getNormalizedBoneNode('leftUpperLeg');
+          const rUL = humanoid.getNormalizedBoneNode('rightUpperLeg');
+          const lLL = humanoid.getNormalizedBoneNode('leftLowerLeg');
+          const rLL = humanoid.getNormalizedBoneNode('rightLowerLeg');
+          if (lUL) lUL.rotation.x = legSwing;
+          if (rUL) rUL.rotation.x = -legSwing;
+          if (lLL) lLL.rotation.x = Math.max(0, -legSwing) * 0.5;
+          if (rLL) rLL.rotation.x = Math.max(0, legSwing) * 0.5;
+
+          const spine = humanoid.getNormalizedBoneNode('spine');
+          if (spine) spine.rotation.z = Math.sin(t) * 0.05;
+
+          const hips = humanoid.getNormalizedBoneNode('hips');
+          if (hips) hips.position.y = bodyBob;
+        }
+
+        this.renderer.resetState();
+        this.renderer.render(this.scene, this.camera);
+        map.triggerRepaint();
       }
-      // リアルタイム再描画（キャラアニメーション用）
-      const repaintInterval = setInterval(() => map.triggerRepaint(), 16);
-      map._repaintInterval = repaintInterval;
-      setMapInstance(map);
-      // 3D建物レイヤー
-      const sources = map.getStyle().sources;
-      const buildingSource = Object.keys(sources).find(k => sources[k].type === 'vector') ?? 'openmaptiles';
-      try {
-        map.addLayer({
-          'id': '3d-buildings',
-          'source': buildingSource,
-          'source-layer': 'building',
-          'type': 'fill-extrusion',
-          'minzoom': 15,
-          'paint': {
-            'fill-extrusion-color': '#7ecfcf',
-            'fill-extrusion-height': ['get', 'render_height']
-          }
-        });
-      } catch (e) { console.warn('3d-buildings layer error:', e); }
+    };
 
-      // 建物の輪郭線（ポケGo風）
-      try {
-        map.addLayer({
-          'id': 'building-outline',
-          'source': buildingSource,
-          'source-layer': 'building',
-          'type': 'line',
-          'minzoom': 15,
-          'paint': {
-            'line-color': '#ffffff',
-            'line-width': 2,
-            'line-opacity': 0.8,
-          }
-        });
-      } catch (e) { console.warn('building-outline error:', e); }
-
-      // ポケGoっぽい色合いに変更
-      const paintMap = {
-        'background':            [['background-color', '#b8e4e0']],
-        'landcover':             [['fill-color', '#b8e4e0']],
-        'landuse':               [['fill-color', '#6db87f']],
-        'landuse_residential':   [['fill-color', '#c8e8c0']],
-        'park_national_park':    [['fill-color', '#5a9e6f']],
-        'park_nature_reserve':   [['fill-color', '#5a9e6f']],
-        'water':                 [['fill-color', '#4ab8d4']],
-        'road_service_fill':     [['line-color', '#a8a89e'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,1,17,30]]],
-        'road_minor_fill':       [['line-color', '#a8a89e'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,17,30]]],
-        'road_sec_fill_noramp':  [['line-color', '#a8a89e'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,17,30]]],
-        'road_pri_fill_noramp':  [['line-color', '#a8a89e'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,30]]],
-        'road_trunk_fill_noramp':[['line-color', '#a8a89e'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,30]]],
-        'road_mot_fill_noramp':  [['line-color', '#a8a89e'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,30]]],
-        'road_service_case':     [['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,2,17,40]]],
-        'road_minor_case':       [['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,3,17,40]]],
-        'road_sec_case_noramp':  [['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,4,17,40]]],
-        'road_pri_case_noramp':  [['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,40]]],
-        'road_trunk_case_noramp':[['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,5,17,40]]],
-        'road_mot_case_noramp':  [['line-color', '#e8c97a'], ['line-width', ['interpolate',['exponential',1.5],['zoom'],10,6,17,40]]],
-        'building':              [['fill-color', '#9edede'], ['fill-outline-color', '#4ab3b3']],
-        'building-top':          [['fill-color', '#7ecfcf'], ['fill-outline-color', '#4ab3b3']],
-      };
-      Object.entries(paintMap).forEach(([id, props]) => {
-        props.forEach(([prop, val]) => {
-          try { map.setPaintProperty(id, prop, val); } catch(e) { console.warn('[PAINT ERROR]', id, prop, e.message); }
-        });
-      });
-    });
+    // 既存レイヤーを削除してから追加（再マウント対策）
+    try {
+      if (map && map.getLayer && map.getLayer('vrm-player-layer')) {
+        map.removeLayer('vrm-player-layer');
+      }
+      map.addLayer(vrmLayer);
+    } catch (e) {
+      console.warn('[VRM] addLayer error:', e);
+    }
 
     return () => {
-      if (map._repaintInterval) clearInterval(map._repaintInterval);
-      map.remove();
-      mapInstanceRef.current = null;
+      try {
+        if (map && map.getLayer && map.getLayer('vrm-player-layer')) {
+          map.removeLayer('vrm-player-layer');
+        }
+      } catch (e) {}
     };
-  }, []);
+  }, [map]);
 
-  // 位置の追従ロジック（ポケGoっぽくキャラの後ろからカメラ追従）
-  useEffect(() => {
-    if (mapInstance && activeLocation) {
-      mapInstance.easeTo({
-        center: [activeLocation.lng, activeLocation.lat],
-        zoom: 17,
-        pitch: 85,
-        offset: [0, 80],
-        duration: 800,
-        easing: (t) => t
-      });
-    }
-  }, [activeLocation, mapInstance]);
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-      
-      {/* 3Dキャラクターを地図に重ねる */}
-      {mapInstance && <PlayerCharacter map={mapInstance} lat={activeLocation?.lat ?? QUEST_LAT} lng={activeLocation?.lng ?? QUEST_LNG} bearing={mapInstance.getBearing()} />}
-
-      {/* 現在地ボタンなどのUI */}
-      <button 
-        onClick={() => mapInstance?.easeTo({ center: [activeLocation.lng, activeLocation.lat], zoom: 18 })}
-        style={{ position: 'absolute', bottom: 180, right: 10, zIndex: 500 }}
-      >
-        <Navigation size={24} />
-      </button>
-    </div>
-  );
+  return null;
 };
 
-export default MapTab;
+export default PlayerCharacter;
