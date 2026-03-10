@@ -7,29 +7,28 @@ import PlayerCharacter from './PlayerCharacter.jsx';
 const MAP_ZOOM = 17;
 const MAP_PITCH = 85;
 
-// POIの種別ラベル
 const POI_LABELS = {
-  park:       { label: '公園',             emoji: '🌳', color: '#5a9e6f' },
-  garden:     { label: 'ガーデン',         emoji: '🌸', color: '#5a9e6f' },
-  mall:       { label: 'ショッピングモール', emoji: '🏬', color: '#e8734a' },
-  supermarket:{ label: 'スーパー',         emoji: '🛒', color: '#e8734a' },
-  school:     { label: '学校',             emoji: '🏫', color: '#6a9bd4' },
-  hospital:   { label: '病院',             emoji: '🏥', color: '#e85a5a' },
+  park:        { label: '公園',              emoji: '🌳', color: '#5a9e6f' },
+  garden:      { label: 'ガーデン',          emoji: '🌸', color: '#5a9e6f' },
+  mall:        { label: 'ショッピングモール', emoji: '🏬', color: '#e8734a' },
+  supermarket: { label: 'スーパー',          emoji: '🛒', color: '#e8734a' },
+  school:      { label: '学校',              emoji: '🏫', color: '#6a9bd4' },
+  hospital:    { label: '病院',              emoji: '🏥', color: '#e85a5a' },
 };
 
 const getPOIType = (tags) => {
-  if (tags?.leisure === 'park')         return 'park';
-  if (tags?.leisure === 'garden')       return 'garden';
-  if (tags?.shop === 'mall')            return 'mall';
-  if (tags?.shop === 'supermarket')     return 'supermarket';
-  if (tags?.amenity === 'school')       return 'school';
-  if (tags?.amenity === 'hospital')     return 'hospital';
-  return 'mall'; // fallback
+  if (tags?.leisure === 'park')       return 'park';
+  if (tags?.leisure === 'garden')     return 'garden';
+  if (tags?.shop === 'mall')          return 'mall';
+  if (tags?.shop === 'supermarket')   return 'supermarket';
+  if (tags?.amenity === 'school')     return 'school';
+  if (tags?.amenity === 'hospital')   return 'hospital';
+  return 'mall';
 };
 
 // ── POIクエスト完了モーダル ──────────────────────────────────
 const POIQuestModal = ({ poi, onComplete, onClose }) => {
-  const [status, setStatus] = useState('idle'); // idle | done
+  const [status, setStatus] = useState('idle');
 
   const handleComplete = () => {
     setStatus('done');
@@ -48,7 +47,7 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
       style={{ background: 'rgba(0,0,0,0.45)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-10 shadow-2xl animate-slide-up">
+      <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-10 shadow-2xl">
         {/* ヘッダー */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -127,7 +126,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const markersRef = useRef([]);
   const mapInstanceRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
-  const [selectedPOI, setSelectedPOI] = useState(null); // クリックされたPOI
+  const [selectedPOI, setSelectedPOI] = useState(null);
 
   const activeLocation = userLocation || (gpsStatus === 'mock'
     ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG }
@@ -153,6 +152,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     mapInstanceRef.current = map;
 
     map.on('load', () => {
+      console.log('[MAP LOADED]');
+
       const loc = activeLocationRef.current;
       if (loc) map.jumpTo({ center: [loc.lng, loc.lat], zoom: MAP_ZOOM, pitch: MAP_PITCH });
 
@@ -160,9 +161,103 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
 
-      const loc2 = activeLocationRef.current;
-      if (loc2) fetchAndPlacePOI(map, loc2.lat, loc2.lng);
-      else fetchAndPlacePOI(map, QUEST_LAT, QUEST_LNG);
+      // ── POI取得（インライン）──────────────────────────────
+      const poiLat = activeLocationRef.current?.lat ?? QUEST_LAT;
+      const poiLng = activeLocationRef.current?.lng ?? QUEST_LNG;
+
+      (async () => {
+        markersRef.current.forEach(m => m.remove());
+        markersRef.current = [];
+
+        const radius = 1000;
+        const query = `
+          [out:json][timeout:25];
+          (
+            node["leisure"="park"](around:${radius},${poiLat},${poiLng});
+            node["leisure"="garden"](around:${radius},${poiLat},${poiLng});
+            node["shop"="mall"](around:${radius},${poiLat},${poiLng});
+            node["shop"="supermarket"](around:${radius},${poiLat},${poiLng});
+            node["amenity"="school"](around:${radius},${poiLat},${poiLng});
+            node["amenity"="hospital"](around:${radius},${poiLat},${poiLng});
+            way["leisure"="park"](around:${radius},${poiLat},${poiLng});
+            way["landuse"="park"](around:${radius},${poiLat},${poiLng});
+            way["shop"="mall"](around:${radius},${poiLat},${poiLng});
+          );
+          out center 20;
+        `;
+
+        let data = null;
+        try {
+          console.log('[POI] fetch開始 lat:', poiLat, 'lng:', poiLng);
+          const res = await fetch('https://maps.mail.ru/osm/tools/overpass/api/interpreter', {
+            method: 'POST',
+            body: query,
+            signal: AbortSignal.timeout(15000),
+          });
+          data = await res.json();
+          console.log('[POI] 取得件数:', data.elements?.length);
+        } catch (e) {
+          console.warn('[POI] fetch失敗:', e.message);
+        }
+
+        if (!data) return;
+
+        data.elements.forEach(el => {
+          const elLat = el.lat ?? el.center?.lat;
+          const elLng = el.lon ?? el.center?.lon;
+          if (!elLat || !elLng) return;
+
+          const poiType = getPOIType(el.tags);
+          const info = POI_LABELS[poiType];
+
+          const pinEl = document.createElement('div');
+          pinEl.style.cssText = `
+            width: 40px; height: 40px;
+            background: ${info.color};
+            border: 3px solid white;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+          `;
+          const inner = document.createElement('div');
+          inner.style.cssText = `
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            transform: rotate(45deg);
+            font-size: 18px;
+          `;
+          inner.textContent = info.emoji;
+          pinEl.appendChild(inner);
+
+          pinEl.addEventListener('mouseenter', () => {
+            pinEl.style.transform = 'rotate(-45deg) scale(1.2)';
+            pinEl.style.boxShadow = '0 5px 14px rgba(0,0,0,0.45)';
+          });
+          pinEl.addEventListener('mouseleave', () => {
+            pinEl.style.transform = 'rotate(-45deg) scale(1)';
+            pinEl.style.boxShadow = '0 3px 8px rgba(0,0,0,0.35)';
+          });
+          pinEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setSelectedPOI({
+              poiType,
+              name: el.tags?.name ?? null,
+              lat: elLat,
+              lng: elLng,
+              xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
+            });
+          });
+
+          const marker = new maplibregl.Marker({ element: pinEl })
+            .setLngLat([elLng, elLat])
+            .addTo(map);
+          console.log('[POI] マーカー追加:', elLng, elLat);
+          markersRef.current.push(marker);
+        });
+      })();
+      // ── POI取得ここまで ──────────────────────────────────
 
       // 3D建物
       const sources = map.getStyle().sources;
@@ -182,7 +277,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         });
       } catch (e) { console.warn('building-outline error:', e); }
 
-      // カラー設定
+      // ポケGoっぽい色設定
       const paintMap = {
         'background':            [['background-color', '#b8e4e0']],
         'landcover':             [['fill-color', '#b8e4e0']],
@@ -220,96 +315,6 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     };
   }, []);
 
-  // POI取得 & マーカー配置（クリック対応）
-  const fetchAndPlacePOI = async (map, lat, lng) => {
-    markersRef.current.forEach(m => m.remove());
-    markersRef.current = [];
-
-    const radius = 1000;
-    const query = `
-      [out:json][timeout:25];
-      (
-        node["leisure"="park"](around:${radius},${lat},${lng});
-        node["leisure"="garden"](around:${radius},${lat},${lng});
-        node["shop"="mall"](around:${radius},${lat},${lng});
-        node["shop"="supermarket"](around:${radius},${lat},${lng});
-        node["amenity"="school"](around:${radius},${lat},${lng});
-        node["amenity"="hospital"](around:${radius},${lat},${lng});
-        way["leisure"="park"](around:${radius},${lat},${lng});
-        way["landuse"="park"](around:${radius},${lat},${lng});
-        way["shop"="mall"](around:${radius},${lat},${lng});
-      );
-      out center 20;
-    `;
-    let data = null;
-    try {
-      const res = await fetch('https://maps.mail.ru/osm/tools/overpass/api/interpreter', {
-        method: 'POST', body: query, signal: AbortSignal.timeout(15000)
-      });
-      data = await res.json();
-    } catch(e) { console.warn('[POI] fetch失敗:', e.message); }
-
-    if (!data) return;
-
-    data.elements.forEach(el => {
-      const elLat = el.lat ?? el.center?.lat;
-      const elLng = el.lon ?? el.center?.lon;
-      if (!elLat || !elLng) return;
-
-      const poiType = getPOIType(el.tags);
-      const info = POI_LABELS[poiType];
-
-      // ピンのDOM
-      const pinEl = document.createElement('div');
-      pinEl.style.cssText = `
-        width: 40px; height: 40px;
-        background: ${info.color};
-        border: 3px solid white;
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-        cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
-      `;
-      const inner = document.createElement('div');
-      inner.style.cssText = `
-        width: 100%; height: 100%;
-        display: flex; align-items: center; justify-content: center;
-        transform: rotate(45deg);
-        font-size: 18px;
-      `;
-      inner.textContent = info.emoji;
-      pinEl.appendChild(inner);
-
-      // ホバー演出
-      pinEl.addEventListener('mouseenter', () => {
-        pinEl.style.transform = 'rotate(-45deg) scale(1.2)';
-        pinEl.style.boxShadow = '0 5px 14px rgba(0,0,0,0.45)';
-      });
-      pinEl.addEventListener('mouseleave', () => {
-        pinEl.style.transform = 'rotate(-45deg) scale(1)';
-        pinEl.style.boxShadow = '0 3px 8px rgba(0,0,0,0.35)';
-      });
-
-      // ── クリックでモーダルを開く ──
-      pinEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setSelectedPOI({
-          poiType,
-          name: el.tags?.name ?? null,
-          lat: elLat,
-          lng: elLng,
-          xp: poiType === 'park' || poiType === 'garden' ? 15 : 10,
-        });
-      });
-
-      const marker = new maplibregl.Marker({ element: pinEl })
-        .setLngLat([elLng, elLat])
-        .addTo(map);
-      markersRef.current.push(marker);
-    });
-  };
-
   // カメラ追従
   useEffect(() => {
     if (mapInstance && activeLocation) {
@@ -319,14 +324,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         pitch: MAP_PITCH,
         offset: [0, 80],
         duration: 800,
-        easing: (t) => t
+        easing: (t) => t,
       });
     }
   }, [activeLocation, mapInstance]);
-
-  const handlePOIComplete = (poi) => {
-    onQuestComplete?.(poi);
-  };
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -354,7 +355,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           position: 'absolute', bottom: 180, right: 12, zIndex: 500,
           background: 'white', borderRadius: '50%', width: 44, height: 44,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer',
         }}
       >
         <Navigation size={20} color="#4f46e5" />
@@ -364,7 +365,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       {selectedPOI && (
         <POIQuestModal
           poi={selectedPOI}
-          onComplete={handlePOIComplete}
+          onComplete={(poi) => onQuestComplete?.(poi)}
           onClose={() => setSelectedPOI(null)}
         />
       )}
