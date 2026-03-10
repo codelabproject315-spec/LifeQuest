@@ -56,6 +56,20 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           }
         });
       } catch (e) { console.warn('3d-buildings layer error:', e); }
+
+      // 道路を太くする
+      const roadLayers = map.getStyle().layers.filter(l => l['source-layer'] === 'transportation');
+      roadLayers.forEach(l => {
+        try {
+          if (l.type === 'line') {
+            map.setPaintProperty(l.id, 'line-width', [
+              'interpolate', ['exponential', 1.5], ['zoom'],
+              10, ['*', ['get', 'width'], 3],
+              18, 30
+            ]);
+          }
+        } catch (e) {}
+      });
     });
 
     return () => {
