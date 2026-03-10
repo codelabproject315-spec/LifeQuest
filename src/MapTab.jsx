@@ -128,17 +128,14 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     console.log('[POI] fetch開始 lat:', lat, 'lng:', lng);
     const radius = 1000; // 半径500m
     const query = `
-      [out:json][timeout:10];
+      [out:json][timeout:15];
       (
         node["leisure"="park"](around:${radius},${lat},${lng});
-        node["landuse"="retail"](around:${radius},${lat},${lng});
         node["shop"="mall"](around:${radius},${lat},${lng});
+        node["landuse"="retail"](around:${radius},${lat},${lng});
         node["amenity"="marketplace"](around:${radius},${lat},${lng});
-        way["leisure"="park"](around:${radius},${lat},${lng});
-        way["shop"="mall"](around:${radius},${lat},${lng});
-        way["landuse"="retail"](around:${radius},${lat},${lng});
       );
-      out center 20;
+      out 20;
     `;
     const endpoints = [
       'https://overpass-api.de/api/interpreter',
@@ -151,7 +148,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         const res = await fetch(endpoint, {
           method: 'POST',
           body: query,
-          signal: AbortSignal.timeout(8000)
+          signal: AbortSignal.timeout(15000)
         });
         data = await res.json();
         console.log('[POI] 取得件数:', data.elements?.length);
