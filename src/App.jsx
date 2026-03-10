@@ -1345,7 +1345,10 @@ export default function App() {
           mockOffset={mockOffset} 
           setMockOffset={setMockOffset} 
           QUEST_LAT={QUEST_LAT} 
-          QUEST_LNG={QUEST_LNG} 
+          QUEST_LNG={QUEST_LNG}
+          onQuestComplete={(poi) => {
+            handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
+          }}
           />
       </div>
     )}
