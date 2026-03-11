@@ -83,12 +83,13 @@ const PlaceModal = ({ group, currentUserId, onDelete, deleting, onClose }) => {
                     </button>
                   )}
                 </div>
-                <img
-                  src={`data:image/jpeg;base64,${post.imageBase64}`}
-                  className="w-full object-cover"
-                  style={{ maxHeight: 260 }}
-                  alt={post.poiName}
-                />
+                <div className="w-full" style={{ aspectRatio: '1' }}>
+                  <img
+                    src={`data:image/jpeg;base64,${post.imageBase64}`}
+                    className="w-full h-full object-cover"
+                    alt={post.poiName}
+                  />
+                </div>
                 {post.caption
                   ? <p className="px-4 py-3 text-sm text-slate-700 font-bold text-left">{post.caption}</p>
                   : <div className="pb-2" />
