@@ -1,7 +1,7 @@
 // ── PlaceFeed.jsx ─────────────────────────────────────────────
 import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, limit, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { Loader2, Trash2, X, ChevronRight } from 'lucide-react';
+import { Loader2, Trash2, X, ChevronRight, Search } from 'lucide-react';
 
 const POI_LABELS = {
   park:        { label: '公園',              emoji: '🌳', color: '#5a9e6f' },
@@ -109,6 +109,7 @@ const PlaceFeed = ({ db, appId, currentUserId }) => {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(null);
   const [openGroup, setOpenGroup] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!db || !appId) return;
@@ -142,6 +143,10 @@ const PlaceFeed = ({ db, appId, currentUserId }) => {
   }, {});
   const sortedGroups = Object.values(groups).sort((a, b) => b.latestAt - a.latestAt);
 
+  const filteredGroups = searchQuery.trim()
+    ? sortedGroups.filter(g => g.poiName.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : sortedGroups;
+
   const syncedOpenGroup = openGroup
     ? sortedGroups.find(g => g.poiName === openGroup.poiName) ?? null
     : null;
@@ -162,9 +167,31 @@ const PlaceFeed = ({ db, appId, currentUserId }) => {
 
   return (
     <>
+      {/* 検索バー */}
+      <div className="relative mb-3">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          placeholder="場所を検索..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="w-full bg-white border border-slate-200 rounded-2xl py-2.5 pl-9 pr-9 text-sm font-bold outline-none focus:border-indigo-400 transition-colors"
+        />
+        {searchQuery && (
+          <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 active:scale-90 transition-transform">
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
       <div className="space-y-3">
-        {sortedGroups.map(group => {
-          const info = POI_LABELS[group.poiType] ?? POI_LABELS.mall;
+        {filteredGroups.length === 0 && (
+          <div className="text-center py-10 text-slate-400">
+            <p className="font-bold text-sm">「{searchQuery}」は見つかりません</p>
+          </div>
+        )}
+        {filteredGroups.map(group => {
+          const info = POI_LABELS[group.poiType] ?? { emoji: '📍', color: '#888888' };
           const previews = group.posts.slice(0, 3);
           return (
             <button
