@@ -509,6 +509,14 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
       vrm = gltf.userData.vrm;
       VRMUtils.rotateVRM0(vrm);
       vrm.scene.scale.set(1, 1, 1);
+      // 初期ポーズがおかしいモデルの腕・手をリセット
+      const h = vrm.humanoid;
+      if (h) {
+        ['leftUpperArm','rightUpperArm','leftLowerArm','rightLowerArm','leftHand','rightHand'].forEach(name => {
+          const bone = h.getNormalizedBoneNode(name);
+          if (bone) bone.rotation.set(0, 0, 0);
+        });
+      }
       scene.add(vrm.scene);
     });
 
