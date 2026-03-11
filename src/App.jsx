@@ -476,8 +476,95 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // �
   );
 };
 
+// ── ProfileEditModal ──────────────────────────────────────
+const AVATAR_SEEDS = ['adventurer','hero','ninja','wizard','knight','samurai','ranger','mage','rogue','paladin','bard','druid'];
+
+const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
+  const [name, setName] = useState(currentUser.name);
+  const [email, setEmail] = useState(currentUser.email);
+  const [password, setPassword] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState(currentUser.avatar);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    if (!name.trim() || !email.trim()) { setError('名前とメールアドレスは必須です'); return; }
+    setSaving(true); setError('');
+    try {
+      const col = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+      const snap = await getDocs(col);
+      const others = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(u => u.id !== currentUser.id);
+      if (others.find(u => u.email === email)) { setError('このメールアドレスは既に使われています'); setSaving(false); return; }
+      const updated = {
+        ...currentUser,
+        name: name.trim(),
+        email: email.trim(),
+        avatar: selectedAvatar,
+        ...(password ? { password } : {}),
+      };
+      await onSave(updated);
+      onClose();
+    } catch { setError('保存に失敗しました'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-10 overflow-y-auto" style={{ maxHeight: '90vh' }}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-black text-lg text-slate-800">プロフィール編集</h2>
+          <button type="button" onClick={onClose} className="p-2 rounded-full bg-slate-100 text-slate-400 active:scale-90 transition-transform"><X size={18} /></button>
+        </div>
+
+        {error && <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
+
+        {/* アバター選択 */}
+        <p className="text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">アバター</p>
+        <div className="grid grid-cols-6 gap-2 mb-5">
+          {AVATAR_SEEDS.map(seed => {
+            const url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+            const isSelected = selectedAvatar === url;
+            return (
+              <button key={seed} type="button" onClick={() => setSelectedAvatar(url)}
+                className={`rounded-xl border-2 p-0.5 transition-all active:scale-90 ${isSelected ? 'border-indigo-500 shadow-md' : 'border-slate-100'}`}>
+                <img src={url} className="w-full aspect-square rounded-lg" alt={seed} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 名前 */}
+        <p className="text-xs font-black text-slate-500 mb-1 uppercase tracking-wider">名前</p>
+        <div className="relative mb-4">
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+          <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3 pl-10 pr-4 font-bold text-sm outline-none focus:border-indigo-500 focus:bg-white transition-all" />
+        </div>
+
+        {/* メールアドレス */}
+        <p className="text-xs font-black text-slate-500 mb-1 uppercase tracking-wider">メールアドレス</p>
+        <div className="relative mb-4">
+          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3 pl-10 pr-4 font-bold text-sm outline-none focus:border-indigo-500 focus:bg-white transition-all" />
+        </div>
+
+        {/* パスワード */}
+        <p className="text-xs font-black text-slate-500 mb-1 uppercase tracking-wider">パスワード（変更する場合のみ）</p>
+        <div className="relative mb-6">
+          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="入力しない場合は変更なし" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3 pl-10 pr-4 font-bold text-sm outline-none focus:border-indigo-500 focus:bg-white transition-all placeholder-slate-300" />
+        </div>
+
+        <button type="button" onClick={handleSave} disabled={saving} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          {saving ? '保存中...' : '保存する'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ── Badges Tab ────────────────────────────────────────────
-const BadgesTab = ({ currentUser, maxXP, handleLogout }) => {
+const BadgesTab = ({ currentUser, maxXP, handleLogout, onEditProfile }) => {
   const earned = currentUser.badges || [];
   const today = new Date();
   const streakDays = Array.from({ length: 7 }, (_, i) => {
@@ -502,7 +589,10 @@ const BadgesTab = ({ currentUser, maxXP, handleLogout }) => {
             <XPBar xp={currentUser.xp || 0} maxXP={maxXP} level={currentUser.level} />
           </div>
         </div>
-        <button type="button" onClick={handleLogout} className="text-[10px] text-red-400 font-black px-2 py-1 rounded-lg bg-red-50 shrink-0">ログアウト</button>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button type="button" onClick={onEditProfile} className="text-[10px] text-indigo-500 font-black px-2 py-1 rounded-lg bg-indigo-50">編集</button>
+          <button type="button" onClick={handleLogout} className="text-[10px] text-red-400 font-black px-2 py-1 rounded-lg bg-red-50">ログアウト</button>
+        </div>
       </div>
 
       {/* ストリーク */}
@@ -1036,6 +1126,7 @@ export default function App() {
   const [allUsers, setAllUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('home');
   const [notification, setNotification] = useState(null); // { type: 'levelup'|'badge', data }
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const { location: userLocation, gpsStatus, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
 
@@ -1362,9 +1453,19 @@ export default function App() {
         )}
         {/* ← db, appId を追加 */}
         {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} db={db} appId={appId} />}
-        {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} />}
+        {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} onEditProfile={() => setIsEditingProfile(true)} />}
         {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} />}
       </main>
+
+      {isEditingProfile && (
+        <ProfileEditModal
+          currentUser={currentUser}
+          onSave={saveUser}
+          onClose={() => setIsEditingProfile(false)}
+          db={db}
+          appId={appId}
+        />
+      )}
 
       {/* Nav */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-lg border-t border-slate-100 flex justify-around items-center px-2 py-2 z-40">
