@@ -1,4 +1,5 @@
 import MapTab from './MapTab';
+import PlaceFeed from './PlaceFeed'; // ← 追加
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
@@ -390,7 +391,7 @@ const AIQuestGenerator = ({ onAdd, currentUser }) => {
 };
 
 // ── Social Tab ────────────────────────────────────────────
-const SocialTab = ({ currentUser, allUsers, onUpdateUser }) => {
+const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // ← db, appId を追加
   const [tab, setTab] = useState('ranking');
   const [coopQuests] = useState([
     { id: 'c1', title: '朝5時起き', desc: '早起きチャレンジ', xp: 80, participants: 3, emoji: '🌅' },
@@ -417,7 +418,8 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser }) => {
         {myRank > 0 && <span className="text-xs font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">現在 {myRank}位</span>}
       </div>
       <div className="flex gap-2 mb-4">
-        {[['ranking', '🏆 ランキング'], ['coop', '🤝 協力クエスト']].map(([key, label]) => (
+        {/* ← feedタブを追加 */}
+        {[['ranking', '🏆 ランキング'], ['feed', '📷 フィード'], ['coop', '🤝 協力クエスト']].map(([key, label]) => (
           <button key={key} type="button" onClick={() => setTab(key)} className={`flex-1 py-2 rounded-xl font-black text-xs transition-all ${tab === key ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>{label}</button>
         ))}
       </div>
@@ -440,6 +442,11 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser }) => {
             );
           })}
         </div>
+      )}
+
+      {/* ← feedタブの表示 */}
+      {tab === 'feed' && (
+        <PlaceFeed db={db} appId={appId} currentUserId={currentUser.id} />
       )}
 
       {tab === 'coop' && (
@@ -1294,8 +1301,6 @@ export default function App() {
         </div>
       )}
 
-
-
       {/* Main */}
       <main className={`flex-1 overflow-y-auto ${activeTab === 'map' ? '' : 'pb-24'}`}>
         {activeTab === 'home' && (
@@ -1337,22 +1342,26 @@ export default function App() {
           </div>
         )}
         {activeTab === 'map' && (
-      <div className="absolute inset-0 w-full h-full z-0"> 
-        <MapTab 
-          quests={quests} 
-          userLocation={userLocation} 
-          gpsStatus={gpsStatus} 
-          mockOffset={mockOffset} 
-          setMockOffset={setMockOffset} 
-          QUEST_LAT={QUEST_LAT} 
-          QUEST_LNG={QUEST_LNG}
-          onQuestComplete={(poi) => {
-            handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
-          }}
-          />
-      </div>
-    )}
-        {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} />}
+          <div className="absolute inset-0 w-full h-full z-0">
+            <MapTab
+              quests={quests}
+              userLocation={userLocation}
+              gpsStatus={gpsStatus}
+              mockOffset={mockOffset}
+              setMockOffset={setMockOffset}
+              QUEST_LAT={QUEST_LAT}
+              QUEST_LNG={QUEST_LNG}
+              currentUser={currentUser}
+              db={db}
+              appId={appId}
+              onQuestComplete={(poi) => {
+                handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
+              }}
+            />
+          </div>
+        )}
+        {/* ← db, appId を追加 */}
+        {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} db={db} appId={appId} />}
         {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} />}
         {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} />}
       </main>
