@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
-const MAP_ZOOM = 18;
+const MAP_ZOOM = 17;
 const MAP_PITCH = 85;
 
 const POI_LABELS = {
@@ -33,13 +33,16 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
   const streamRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
   const [camError, setCamError] = useState('');
+  const [facingMode, setFacingMode] = useState('environment');
 
-  useEffect(() => { if (isOpen) startCamera(); return stopCamera; }, [isOpen]);
+  useEffect(() => { if (isOpen) startCamera(facingMode); return stopCamera; }, [isOpen]);
 
-  const startCamera = async () => {
+  const startCamera = async (mode) => {
     setCamError('');
+    setIsReady(false);
+    streamRef.current?.getTracks().forEach(t => t.stop());
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } });
       streamRef.current = s;
       if (videoRef.current) {
         videoRef.current.srcObject = s;
@@ -54,12 +57,23 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
     setCamError('');
   };
   const handleClose = () => { stopCamera(); onClose(); };
+  const handleFlip = () => {
+    const next = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(next);
+    startCamera(next);
+  };
   const handleCapture = () => {
     const canvas = document.createElement('canvas');
     const video = videoRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+    const ctx = canvas.getContext('2d');
+    // インカメは左右反転して保存
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0);
     const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
     stopCamera();
     onCapture(base64);
@@ -75,11 +89,23 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
         </div>
       ) : (
         <>
-          <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full h-full object-cover" />
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="flex-1 w-full h-full object-cover"
+            style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+          />
           <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none">
-            <button type="button" onClick={handleClose} className="p-3 bg-black/40 text-white rounded-full self-start pointer-events-auto active:scale-90 transition-transform">
-              <X size={24} />
-            </button>
+            <div className="flex items-center justify-between pointer-events-auto">
+              <button type="button" onClick={handleClose} className="p-3 bg-black/40 text-white rounded-full active:scale-90 transition-transform">
+                <X size={24} />
+              </button>
+              <button type="button" onClick={handleFlip} className="p-3 bg-black/40 text-white rounded-full active:scale-90 transition-transform">
+                <Camera size={24} />
+              </button>
+            </div>
             <div className="flex flex-col items-center gap-4 pointer-events-auto mb-12">
               <div className="text-white text-xs font-bold bg-black/50 px-4 py-2 rounded-full border border-white/20">
                 📍 この場所の写真を撮ってください
