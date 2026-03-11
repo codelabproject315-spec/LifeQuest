@@ -576,24 +576,30 @@ const BadgesTab = ({ currentUser, maxXP, handleLogout, onEditProfile }) => {
   return (
     <div className="px-4 py-2">
       {/* プロフィールカード */}
-      <div className="bg-white rounded-3xl p-4 mb-4 border border-slate-100 shadow-sm flex items-center gap-3">
-        <img src={currentUser.avatar} className="w-14 h-14 rounded-2xl border-2 border-indigo-200" alt="" />
-        <div className="flex-1 text-left">
-          <h3 className="font-black text-base text-slate-900">{currentUser.name}</h3>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-black">Lv.{currentUser.level}</span>
-            {(currentUser.streak || 0) > 0 && <span className="text-[10px] font-black text-orange-500">🔥{currentUser.streak}日</span>}
-            <span className="text-[10px] font-black text-indigo-500">総XP {currentUser.totalXP || 0}</span>
-          </div>
-          <div className="mt-1.5">
-            <XPBar xp={currentUser.xp || 0} maxXP={maxXP} level={currentUser.level} />
+      <div className="bg-white rounded-3xl p-5 mb-4 border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-4 mb-4">
+          <img src={currentUser.avatar} className="w-16 h-16 rounded-2xl border-2 border-indigo-200 shrink-0" alt="" />
+          <div className="flex-1 text-left min-w-0">
+            <h3 className="font-black text-lg text-slate-900 truncate">{currentUser.name}</h3>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-xs font-black">Lv.{currentUser.level}</span>
+              {(currentUser.streak || 0) > 0 && <span className="text-xs font-black text-orange-500">🔥{currentUser.streak}日</span>}
+              <span className="text-xs font-black text-indigo-500">総XP {currentUser.totalXP || 0}</span>
+            </div>
           </div>
         </div>
-        <div className="flex flex-col gap-1 shrink-0">
-          <button type="button" onClick={onEditProfile} className="text-[10px] text-indigo-500 font-black px-2 py-1 rounded-lg bg-indigo-50">編集</button>
-          <button type="button" onClick={handleLogout} className="text-[10px] text-red-400 font-black px-2 py-1 rounded-lg bg-red-50">ログアウト</button>
+        <div className="mb-4">
+          <XPBar xp={currentUser.xp || 0} maxXP={maxXP} level={currentUser.level} />
         </div>
+        <button type="button" onClick={onEditProfile} className="w-full py-2.5 bg-indigo-50 text-indigo-600 font-black text-sm rounded-2xl active:scale-95 transition-all border border-indigo-100">
+          ✏️ プロフィールを編集
+        </button>
       </div>
+
+      {/* ログアウト */}
+      <button type="button" onClick={handleLogout} className="w-full py-2.5 mb-4 bg-slate-50 text-slate-400 font-black text-xs rounded-2xl active:scale-95 transition-all border border-slate-100">
+        ログアウト
+      </button>
 
       {/* ストリーク */}
       <div className="bg-gradient-to-br from-orange-500 to-rose-500 rounded-3xl p-5 mb-5 text-white">
