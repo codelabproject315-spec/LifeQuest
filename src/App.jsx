@@ -13,7 +13,7 @@ import {
   CheckCircle2, Loader2, MapPin, Zap, X, Mail, Lock,
   AlertCircle, Navigation,
   Sparkles, Users, Map, Award,
-  ChevronRight, Plus, Crown, Trash2
+  ChevronRight, Plus, Crown, Trash2, Bell, BellOff, CheckCircle, XCircle
 } from 'lucide-react';
 
 // --- Firebase 設定 ---
@@ -1193,17 +1193,20 @@ const NOTIFY_API_URL = import.meta.env.VITE_NOTIFY_API_URL || '';
 
 const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(null);   // { ok, sent, failed, details: [{name, email, status}] }
   const [title, setTitle] = useState('⚡ クエスト到着！');
   const [body, setBody] = useState('新しいクエストが届いた！5分以内にクリアせよ！');
+  const [showDetails, setShowDetails] = useState(false);
+
+  // ユーザー削除
   const [deletingUserId, setDeletingUserId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [deleteResult, setDeleteResult] = useState(null);
 
   const sendNotification = async () => {
-    if (!NOTIFY_API_URL) { setResult({ ok: false, msg: 'API URLが未設定です' }); return; }
-    setSending(true); setResult(null);
+    if (!NOTIFY_API_URL) { setResult({ ok: false, summary: 'API URLが未設定です', details: [] }); return; }
+    setSending(true); setResult(null); setShowDetails(false);
     try {
       const res = await fetch(NOTIFY_API_URL, {
         method: 'POST',
@@ -1211,9 +1214,54 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
         body: JSON.stringify({ title, body, force: true }),
       });
       const data = await res.json();
-      setResult({ ok: res.ok, msg: res.ok ? `✅ ${data.sent}人に送信完了！` : `❌ ${JSON.stringify(data)}` });
+
+      // APIレスポンスからユーザーごとの詳細を組み立てる
+      // data.sent / data.failed / data.results?: [{token, success, userId?, error?}]
+      // allUsersとfcmTokenで突合してユーザー名を解決する
+      const userByToken = {};
+      (allUsers || []).forEach(u => { if (u.fcmToken) userByToken[u.fcmToken] = u; });
+
+      let details = [];
+      if (Array.isArray(data.results)) {
+        details = data.results.map(r => {
+          const u = userByToken[r.token] || allUsers?.find(u => u.id === r.userId);
+          return {
+            name: u?.name || r.userId || '不明なユーザー',
+            email: u?.email || '',
+            avatar: u?.avatar || null,
+            success: r.success,
+            error: r.error || null,
+          };
+        });
+      } else if (Array.isArray(data.details)) {
+        // バックエンドが直接 {name, success, error} を返す場合
+        details = data.details.map(r => {
+          const u = allUsers?.find(u => u.name === r.name || u.id === r.userId);
+          return {
+            name: r.name || u?.name || '不明なユーザー',
+            email: u?.email || '',
+            avatar: u?.avatar || null,
+            success: r.success,
+            error: r.error || null,
+          };
+        });
+      }
+
+      const sentCount = data.sent ?? details.filter(d => d.success).length;
+      const failedCount = data.failed ?? details.filter(d => !d.success).length;
+      const totalWithToken = (allUsers || []).filter(u => u.fcmToken).length;
+
+      setResult({
+        ok: res.ok,
+        sent: sentCount,
+        failed: failedCount,
+        totalWithToken,
+        details,
+        rawError: res.ok ? null : JSON.stringify(data),
+      });
+      if (details.length > 0) setShowDetails(true);
     } catch (e) {
-      setResult({ ok: false, msg: `❌ ${e.message}` });
+      setResult({ ok: false, summary: `通信エラー: ${e.message}`, details: [] });
     } finally { setSending(false); }
   };
 
@@ -1235,12 +1283,11 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
   };
 
   const filteredUsers = userSearchQuery.trim()
-    ? allUsers.filter(u =>
+    ? (allUsers || []).filter(u =>
         u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
         u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
       )
-    : allUsers;
-
+    : (allUsers || []);
   const sortedUsers = [...filteredUsers].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
   return (
@@ -1261,11 +1308,82 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
           <label className="text-xs font-bold text-slate-500 block mb-1">メッセージ</label>
           <textarea className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-indigo-400 resize-none" rows={3} value={body} onChange={e => setBody(e.target.value)} />
         </div>
-        <button onClick={sendNotification} disabled={sending} className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-black py-3 rounded-xl disabled:opacity-50 active:scale-95 transition-transform">
-          {sending ? '送信中...' : '🚀 今すぐ全員に通知'}
+
+        {/* FCMトークン保有ユーザー数プレビュー */}
+        {allUsers && (
+          <p className="text-xs text-slate-400 font-bold">
+            📱 通知可能ユーザー: <span className="text-indigo-600">{allUsers.filter(u => u.fcmToken).length}人</span> / {allUsers.length}人
+          </p>
+        )}
+
+        <button onClick={sendNotification} disabled={sending} className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-black py-3 rounded-xl disabled:opacity-50 active:scale-95 transition-transform flex items-center justify-center gap-2">
+          {sending ? <><Loader2 size={16} className="animate-spin" />送信中...</> : '🚀 今すぐ全員に通知'}
         </button>
+
+        {/* 送信結果サマリー */}
         {result && (
-          <div className={`text-sm font-bold p-3 rounded-xl ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{result.msg}</div>
+          <div className={`rounded-xl overflow-hidden border ${result.ok ? 'border-emerald-200' : 'border-red-200'}`}>
+            <div className={`p-3 flex items-center gap-3 ${result.ok ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              {result.ok
+                ? <CheckCircle size={18} className="text-emerald-500 flex-shrink-0" />
+                : <XCircle size={18} className="text-red-500 flex-shrink-0" />
+              }
+              <div className="flex-1">
+                {result.ok ? (
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-sm font-black text-emerald-700">送信完了</span>
+                    <span className="flex items-center gap-1 text-xs font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      <Bell size={11} />成功 {result.sent}人
+                    </span>
+                    {result.failed > 0 && (
+                      <span className="flex items-center gap-1 text-xs font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                        <BellOff size={11} />失敗 {result.failed}人
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm font-black text-red-700">{result.summary || result.rawError || '送信失敗'}</p>
+                )}
+              </div>
+              {result.details?.length > 0 && (
+                <button type="button" onClick={() => setShowDetails(v => !v)} className="text-xs font-black text-slate-400 underline flex-shrink-0">
+                  {showDetails ? '閉じる' : '詳細'}
+                </button>
+              )}
+            </div>
+
+            {/* ユーザーごとの詳細リスト */}
+            {showDetails && result.details?.length > 0 && (
+              <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto bg-white">
+                {result.details.map((d, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                    {d.avatar
+                      ? <img src={d.avatar} className="w-7 h-7 rounded-lg flex-shrink-0" alt="" />
+                      : <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 text-xs">👤</div>
+                    }
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-black text-slate-800 truncate">{d.name}</p>
+                      {d.email && <p className="text-[10px] text-slate-400 font-bold truncate">{d.email}</p>}
+                      {!d.success && d.error && <p className="text-[10px] text-red-400 font-bold truncate">{d.error}</p>}
+                    </div>
+                    {d.success
+                      ? <CheckCircle size={15} className="text-emerald-400 flex-shrink-0" />
+                      : <XCircle size={15} className="text-red-400 flex-shrink-0" />
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 詳細データなし・でも人数は出る場合のフォールバック */}
+            {result.ok && result.details?.length === 0 && (
+              <div className="px-3 py-2 bg-white">
+                <p className="text-xs text-slate-400 font-bold">
+                  ※ バックエンドが個別結果を返さないため、ユーザーごとの詳細は表示できません
+                </p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -1273,10 +1391,8 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
       <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <p className="font-black text-slate-700">👥 ユーザー管理</p>
-          <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{allUsers.length}人</span>
+          <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{(allUsers || []).length}人</span>
         </div>
-
-        {/* 検索 */}
         <div className="relative">
           <input
             type="text"
@@ -1291,11 +1407,9 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
             </button>
           )}
         </div>
-
         {deleteResult && (
           <div className={`text-sm font-bold p-3 rounded-xl ${deleteResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{deleteResult.msg}</div>
         )}
-
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {sortedUsers.length === 0 && (
             <p className="text-center text-sm text-slate-400 font-bold py-4">ユーザーが見つかりません</p>
@@ -1306,44 +1420,33 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
             const isDeleting = deletingUserId === user.id;
             return (
               <div key={user.id} className={`flex items-center gap-3 p-3 rounded-xl border ${isMe ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
-                <img
-                  src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`}
-                  className="w-9 h-9 rounded-xl flex-shrink-0"
-                  alt=""
-                />
+                <img src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`} className="w-9 h-9 rounded-xl flex-shrink-0" alt="" />
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="font-black text-sm text-slate-800 truncate">
-                    {user.name}{isMe ? ' (あなた)' : ''}
-                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-black text-sm text-slate-800 truncate">{user.name}{isMe ? ' (あなた)' : ''}</p>
+                    {user.fcmToken
+                      ? <Bell size={11} className="text-emerald-400 flex-shrink-0" title="通知登録済み" />
+                      : <BellOff size={11} className="text-slate-300 flex-shrink-0" title="通知未登録" />
+                    }
+                  </div>
                   <p className="text-[10px] text-slate-400 font-bold truncate">{user.email}</p>
                   <p className="text-[10px] text-slate-400 font-bold">Lv.{user.level || 1} · {user.totalXP || 0} XP</p>
                 </div>
                 {!isMe && (
                   isConfirming ? (
                     <div className="flex gap-1 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteUser(user.id)}
-                        disabled={isDeleting}
-                        className="px-2 py-1.5 bg-red-500 text-white rounded-lg text-xs font-black active:scale-90 transition-transform disabled:opacity-50 flex items-center gap-1"
-                      >
-                        {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                        確認
+                      <button type="button" onClick={() => handleDeleteUser(user.id)} disabled={isDeleting}
+                        className="px-2 py-1.5 bg-red-500 text-white rounded-lg text-xs font-black active:scale-90 transition-transform disabled:opacity-50 flex items-center gap-1">
+                        {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}確認
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs font-black active:scale-90 transition-transform"
-                      >
+                      <button type="button" onClick={() => setConfirmDeleteId(null)}
+                        className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs font-black active:scale-90 transition-transform">
                         取消
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(user.id)}
-                      className="p-2 rounded-xl bg-red-50 text-red-400 active:scale-90 transition-transform flex-shrink-0 hover:bg-red-100"
-                    >
+                    <button type="button" onClick={() => setConfirmDeleteId(user.id)}
+                      className="p-2 rounded-xl bg-red-50 text-red-400 active:scale-90 transition-transform flex-shrink-0 hover:bg-red-100">
                       <Trash2 size={15} />
                     </button>
                   )
