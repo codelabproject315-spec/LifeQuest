@@ -3,8 +3,8 @@
 // App.jsx の SocialTab 内でインポートして使う
 
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { MapPin, Loader2 } from 'lucide-react';
+import { collection, getDocs, query, orderBy, limit, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { MapPin, Loader2, Trash2 } from 'lucide-react';
 
 const POI_LABELS = {
   park:        { label: '公園',              emoji: '🌳', color: '#5a9e6f' },
@@ -28,6 +28,17 @@ const timeAgo = (ts) => {
 const PlaceFeed = ({ db, appId, currentUserId }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(null);
+
+  const handleDelete = async (postId) => {
+    setDeleting(postId);
+    try {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'poi_photos', postId));
+    } catch (e) {
+      console.warn('[PlaceFeed] 削除失敗:', e);
+    }
+    setDeleting(null);
+  };
 
   useEffect(() => {
     if (!db || !appId) return;
@@ -83,7 +94,19 @@ const PlaceFeed = ({ db, appId, currentUserId }) => {
                   <span>· {timeAgo(post.createdAt)}</span>
                 </div>
               </div>
-              <span className="text-xs font-black text-amber-500">+{post.xp} XP</span>
+              {isMe && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(post.id)}
+                  disabled={deleting === post.id}
+                  className="p-2 rounded-xl bg-slate-50 text-slate-400 active:scale-90 transition-transform disabled:opacity-40"
+                >
+                  {deleting === post.id
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : <Trash2 size={15} />
+                  }
+                </button>
+              )}
             </div>
 
             {/* 写真 */}
