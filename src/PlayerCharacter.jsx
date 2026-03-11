@@ -18,7 +18,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) =
     const dLng = lng - lngRef.current;
     // 5m以上移動した場合のみ向きを更新（ノイズ対策）
     const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-    if (dist > 0.00005) {
+    if (dist > 0.00001) {
       const newHeading = Math.atan2(dLat, dLng);
       if (headingRef.current === null) {
         headingRef.current = newHeading;
@@ -116,8 +116,13 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) =
 
           const lUA = humanoid.getNormalizedBoneNode('leftUpperArm');
           const rUA = humanoid.getNormalizedBoneNode('rightUpperArm');
-          if (lUA && modelPath !== '/model3.vrm') { lUA.rotation.z =  Math.PI * 1.5; lUA.rotation.x = -armSwing; }
-          if (rUA && modelPath !== '/model3.vrm') { rUA.rotation.z = -Math.PI * 1.5; rUA.rotation.x =  armSwing; }
+          if (modelPath === '/model3.vrm') {
+            if (lUA) { lUA.rotation.z = -Math.PI * 1.5; lUA.rotation.x = -armSwing; }
+            if (rUA) { rUA.rotation.z =  Math.PI * 1.5; rUA.rotation.x =  armSwing; }
+          } else {
+            if (lUA) { lUA.rotation.z =  Math.PI * 1.5; lUA.rotation.x = -armSwing; }
+            if (rUA) { rUA.rotation.z = -Math.PI * 1.5; rUA.rotation.x =  armSwing; }
+          }
 
           const lUL = humanoid.getNormalizedBoneNode('leftUpperLeg');
           const rUL = humanoid.getNormalizedBoneNode('rightUpperLeg');
