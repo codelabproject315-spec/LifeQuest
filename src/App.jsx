@@ -525,8 +525,13 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
         if (h) {
           const lUA = h.getNormalizedBoneNode('leftUpperArm');
           const rUA = h.getNormalizedBoneNode('rightUpperArm');
-          if (lUA && modelPath !== '/model3.vrm') lUA.rotation.z = -Math.PI * 0.4;
-          if (rUA && modelPath !== '/model3.vrm') rUA.rotation.z = Math.PI * 0.4;
+          if (modelPath === '/model3.vrm') {
+            if (lUA) lUA.rotation.z = -Math.PI * 1.4;
+            if (rUA) rUA.rotation.z =  Math.PI * 1.4;
+          } else {
+            if (lUA) lUA.rotation.z = -Math.PI * 0.4;
+            if (rUA) rUA.rotation.z =  Math.PI * 0.4;
+          }
         }
       }
       renderer.render(scene, camera);
