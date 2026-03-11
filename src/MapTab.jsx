@@ -207,10 +207,27 @@ const POIVisitModal = ({ poi, currentUser, db, appId, onComplete, onClose }) => 
               </button>
             </div>
 
-            {/* XP表示 */}
-            <div className="flex items-center gap-1 mb-4 text-amber-500 font-black text-sm">
-              <Zap size={14} /><span>+{xp} XP</span>
-            </div>
+            {/* 到着メッセージ */}
+            {step === 'intro' && (
+              <div className="flex items-center gap-2 mb-4 text-slate-500 text-sm font-bold">
+                <MapPin size={14} className="text-indigo-400 shrink-0" />
+                <span>{poi.name || info.label} に到着しました</span>
+              </div>
+            )}
+
+            {/* 位置クエスト情報 */}
+            {step === 'intro' && (
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <MapPin size={12} className="text-indigo-500" />
+                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">位置クエスト</span>
+                </div>
+                <p className="font-bold text-sm text-slate-700 mb-2">{info.label}エリアに足を運ぶ</p>
+                <div className="flex items-center gap-1 text-amber-500 font-black text-sm">
+                  <Zap size={13} /><span>+{xp} XP</span>
+                </div>
+              </div>
+            )}
 
             {/* intro: 写真を撮るボタン */}
             {step === 'intro' && (
