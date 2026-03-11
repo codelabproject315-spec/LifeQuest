@@ -13,7 +13,7 @@ import {
   CheckCircle2, Loader2, MapPin, Zap, X, Mail, Lock,
   AlertCircle, Navigation,
   Sparkles, Users, Map, Award,
-  ChevronRight, Plus, Crown
+  ChevronRight, Plus, Crown, Trash2
 } from 'lucide-react';
 
 // --- Firebase 設定 ---
@@ -1191,11 +1191,15 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
 const ADMIN_EMAIL = 'tataka1507@gmail.com';
 const NOTIFY_API_URL = import.meta.env.VITE_NOTIFY_API_URL || '';
 
-const AdminTab = ({ currentUser }) => {
+const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [title, setTitle] = useState('⚡ クエスト到着！');
   const [body, setBody] = useState('新しいクエストが届いた！5分以内にクリアせよ！');
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [deleteResult, setDeleteResult] = useState(null);
 
   const sendNotification = async () => {
     if (!NOTIFY_API_URL) { setResult({ ok: false, msg: 'API URLが未設定です' }); return; }
@@ -1213,12 +1217,40 @@ const AdminTab = ({ currentUser }) => {
     } finally { setSending(false); }
   };
 
+  const handleDeleteUser = async (userId) => {
+    if (!db || !appId) return;
+    setDeletingUserId(userId);
+    setDeleteResult(null);
+    try {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId));
+      setDeleteResult({ ok: true, msg: '✅ ユーザーを削除しました' });
+      onUserDeleted?.(userId);
+    } catch (e) {
+      setDeleteResult({ ok: false, msg: `❌ 削除失敗: ${e.message}` });
+    } finally {
+      setDeletingUserId(null);
+      setConfirmDeleteId(null);
+      setTimeout(() => setDeleteResult(null), 3000);
+    }
+  };
+
+  const filteredUsers = userSearchQuery.trim()
+    ? allUsers.filter(u =>
+        u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
+      )
+    : allUsers;
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
   return (
     <div className="px-4 py-6 space-y-4">
       <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-4 text-white">
         <p className="font-black text-lg">🛡️ 管理者パネル</p>
         <p className="text-red-100 text-xs">{currentUser.email}</p>
       </div>
+
+      {/* 通知送信 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
         <p className="font-black text-slate-700">📣 全ユーザーに通知を送信</p>
         <div>
@@ -1235,6 +1267,91 @@ const AdminTab = ({ currentUser }) => {
         {result && (
           <div className={`text-sm font-bold p-3 rounded-xl ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{result.msg}</div>
         )}
+      </div>
+
+      {/* ユーザー管理 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="font-black text-slate-700">👥 ユーザー管理</p>
+          <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{allUsers.length}人</span>
+        </div>
+
+        {/* 検索 */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="名前・メールで検索..."
+            value={userSearchQuery}
+            onChange={e => setUserSearchQuery(e.target.value)}
+            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-indigo-400 pr-8"
+          />
+          {userSearchQuery && (
+            <button type="button" onClick={() => setUserSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {deleteResult && (
+          <div className={`text-sm font-bold p-3 rounded-xl ${deleteResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{deleteResult.msg}</div>
+        )}
+
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {sortedUsers.length === 0 && (
+            <p className="text-center text-sm text-slate-400 font-bold py-4">ユーザーが見つかりません</p>
+          )}
+          {sortedUsers.map(user => {
+            const isMe = user.id === currentUser.id;
+            const isConfirming = confirmDeleteId === user.id;
+            const isDeleting = deletingUserId === user.id;
+            return (
+              <div key={user.id} className={`flex items-center gap-3 p-3 rounded-xl border ${isMe ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
+                <img
+                  src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`}
+                  className="w-9 h-9 rounded-xl flex-shrink-0"
+                  alt=""
+                />
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="font-black text-sm text-slate-800 truncate">
+                    {user.name}{isMe ? ' (あなた)' : ''}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold truncate">{user.email}</p>
+                  <p className="text-[10px] text-slate-400 font-bold">Lv.{user.level || 1} · {user.totalXP || 0} XP</p>
+                </div>
+                {!isMe && (
+                  isConfirming ? (
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={isDeleting}
+                        className="px-2 py-1.5 bg-red-500 text-white rounded-lg text-xs font-black active:scale-90 transition-transform disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        確認
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-2 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs font-black active:scale-90 transition-transform"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(user.id)}
+                      className="p-2 rounded-xl bg-red-50 text-red-400 active:scale-90 transition-transform flex-shrink-0 hover:bg-red-100"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1576,7 +1693,7 @@ export default function App() {
         {/* ← db, appId を追加 */}
         {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} db={db} appId={appId} />}
         {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} onEditProfile={() => setIsEditingProfile(true)} />}
-        {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} />}
+        {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} db={db} appId={appId} allUsers={allUsers} onUserDeleted={(id) => setAllUsers(prev => prev.filter(u => u.id !== id))} />}
       </main>
 
       {isEditingProfile && (
