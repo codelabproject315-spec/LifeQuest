@@ -4,7 +4,7 @@ import * as maplibregl from 'maplibre-gl';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-const PlayerCharacter = ({ map, lat, lng, bearing }) => {
+const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) => {
   const vrmRef = useRef(null);
   const clockRef = useRef(new THREE.Clock());
   const latRef = useRef(lat);
@@ -54,7 +54,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
 
         console.log('[VRM] 読み込み開始');
         loader.load(
-          '/model.vrm',
+          modelPath,
           (gltf) => {
             console.log('[VRM] 読み込み成功');
             const vrm = gltf.userData.vrm;
@@ -158,7 +158,7 @@ const PlayerCharacter = ({ map, lat, lng, bearing }) => {
         }
       } catch (e) {}
     };
-  }, [map]);
+  }, [map, modelPath]);
 
   return null;
 };
