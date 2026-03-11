@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Navigation, X, CheckCircle2, Zap, MapPin } from 'lucide-react';
+import { Navigation, X, CheckCircle2, Zap, MapPin, Camera, Loader2 } from 'lucide-react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
 const MAP_ZOOM = 18;
 const MAP_PITCH = 85;
@@ -26,14 +27,111 @@ const getPOIType = (tags) => {
   return 'mall';
 };
 
-// ── POIクエスト完了モーダル ──────────────────────────────────
-const POIQuestModal = ({ poi, onComplete, onClose }) => {
-  const [status, setStatus] = useState('idle');
+// ── カメラオーバーレイ ────────────────────────────────────────
+const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [isReady, setIsReady] = useState(false);
+  const [camError, setCamError] = useState('');
+
+  useEffect(() => { if (isOpen) startCamera(); return stopCamera; }, [isOpen]);
+
+  const startCamera = async () => {
+    setCamError('');
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = s;
+      if (videoRef.current) {
+        videoRef.current.srcObject = s;
+        videoRef.current.onloadedmetadata = () => { videoRef.current.play(); setIsReady(true); };
+      }
+    } catch { setCamError('カメラへのアクセスが拒否されました。'); }
+  };
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setIsReady(false);
+    setCamError('');
+  };
+  const handleClose = () => { stopCamera(); onClose(); };
+  const handleCapture = () => {
+    const canvas = document.createElement('canvas');
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+    stopCamera();
+    onCapture(base64);
+  };
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[300] bg-black flex flex-col">
+      {camError ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
+          <p className="text-white font-bold text-center">{camError}</p>
+          <button type="button" onClick={handleClose} className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black">閉じる</button>
+        </div>
+      ) : (
+        <>
+          <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full h-full object-cover" />
+          <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none">
+            <button type="button" onClick={handleClose} className="p-3 bg-black/40 text-white rounded-full self-start pointer-events-auto active:scale-90 transition-transform">
+              <X size={24} />
+            </button>
+            <div className="flex flex-col items-center gap-4 pointer-events-auto mb-12">
+              <div className="text-white text-xs font-bold bg-black/50 px-4 py-2 rounded-full border border-white/20">
+                📍 この場所の写真を撮ってください
+              </div>
+              <button
+                type="button"
+                onClick={handleCapture}
+                disabled={!isReady}
+                className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-90 transition-transform shadow-2xl disabled:opacity-50"
+              />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ── POI訪問モーダル（写真撮影 → 投稿） ───────────────────────
+const POIVisitModal = ({ poi, currentUser, db, appId, onComplete, onClose }) => {
+  const [step, setStep] = useState('intro');   // intro | camera | preview | posting | done
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [caption, setCaption] = useState('');
   const xp = poi.xp ?? 20;
   const info = POI_LABELS[poi.poiType] ?? POI_LABELS.mall;
 
-  const handleComplete = () => {
-    setStatus('done');
+  const handleCapture = (base64) => {
+    setCapturedImage(base64);
+    setStep('preview');
+  };
+
+  const handlePost = async () => {
+    setStep('posting');
+    try {
+      const col = collection(db, 'artifacts', appId, 'public', 'data', 'poi_photos');
+      await addDoc(col, {
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userAvatar: currentUser.avatar,
+        poiName: poi.name || info.label,
+        poiType: poi.poiType,
+        poiLat: poi.lat,
+        poiLng: poi.lng,
+        imageBase64: capturedImage,
+        caption: caption.trim(),
+        xp,
+        createdAt: Date.now(),
+      });
+    } catch (e) {
+      console.warn('[POI POST] 投稿失敗:', e);
+    }
+    setStep('done');
     setTimeout(() => {
       onComplete(poi);
       onClose();
@@ -41,69 +139,120 @@ const POIQuestModal = ({ poi, onComplete, onClose }) => {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-end justify-center"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-28 shadow-2xl">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow"
-              style={{ background: info.color + '22', border: `2px solid ${info.color}` }}
-            >
-              {info.emoji}
+    <>
+      <CameraOverlay
+        isOpen={step === 'camera'}
+        onClose={() => setStep('intro')}
+        onCapture={handleCapture}
+      />
+
+      {step !== 'camera' && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <div className="w-full max-w-md bg-white rounded-t-3xl p-6 pb-28 shadow-2xl">
+
+            {/* ヘッダー */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow"
+                  style={{ background: info.color + '22', border: `2px solid ${info.color}` }}
+                >
+                  {info.emoji}
+                </div>
+                <div className="text-left">
+                  <span
+                    className="text-[10px] font-black px-2 py-0.5 rounded-full mb-1 inline-block"
+                    style={{ background: info.color + '22', color: info.color }}
+                  >
+                    {info.label}
+                  </span>
+                  <h2 className="font-black text-lg text-slate-800 leading-tight">
+                    {poi.name || info.label + 'を訪問'}
+                  </h2>
+                </div>
+              </div>
+              <button type="button" onClick={onClose} className="p-2 rounded-full bg-slate-100 text-slate-400 active:scale-90 transition-transform">
+                <X size={18} />
+              </button>
             </div>
-            <div className="text-left">
-              <span
-                className="text-[10px] font-black px-2 py-0.5 rounded-full mb-1 inline-block"
-                style={{ background: info.color + '22', color: info.color }}
+
+            {/* XP表示 */}
+            <div className="flex items-center gap-1 mb-4 text-amber-500 font-black text-sm">
+              <Zap size={14} /><span>+{xp} XP</span>
+            </div>
+
+            {/* intro: 写真を撮るボタン */}
+            {step === 'intro' && (
+              <button
+                type="button"
+                onClick={() => setStep('camera')}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-base active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg"
               >
-                {info.label}
-              </span>
-              <h2 className="font-black text-lg text-slate-800 leading-tight">
-                {poi.name || info.label + 'を訪問'}
-              </h2>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="p-2 rounded-full bg-slate-100 text-slate-400 active:scale-90 transition-transform">
-            <X size={18} />
-          </button>
-        </div>
+                <Camera size={20} />写真を撮って投稿する
+              </button>
+            )}
 
-        <div className="bg-slate-50 rounded-2xl px-4 py-3 mb-4 flex items-center gap-2 text-left">
-          <MapPin size={14} className="text-slate-400 shrink-0" />
-          <p className="text-xs text-slate-500 font-bold">
-            {poi.name ? `${poi.name} に到着しました` : 'このスポットに到着しました'}
-          </p>
-        </div>
+            {/* preview: 撮った写真の確認・キャプション入力 */}
+            {step === 'preview' && capturedImage && (
+              <div>
+                <img
+                  src={`data:image/jpeg;base64,${capturedImage}`}
+                  className="w-full rounded-2xl object-cover mb-3"
+                  style={{ maxHeight: 200 }}
+                  alt="撮影した写真"
+                />
+                <input
+                  type="text"
+                  placeholder="ひとこと添えよう（任意）"
+                  value={caption}
+                  onChange={e => setCaption(e.target.value)}
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400 mb-3"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('camera')}
+                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-sm active:scale-95 transition-all"
+                  >
+                    撮り直す
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePost}
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-1"
+                  >
+                    <CheckCircle2 size={16} />投稿する
+                  </button>
+                </div>
+              </div>
+            )}
 
-        <div className="border-2 border-indigo-100 rounded-2xl p-4 mb-5 text-left bg-indigo-50/50">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider mb-1">📍 位置クエスト</p>
-          <p className="font-bold text-sm text-slate-700">{info.label}エリアに足を運ぶ</p>
-          <div className="flex items-center gap-1 mt-2 text-amber-500 font-black text-sm">
-            <Zap size={14} /><span>+{xp} XP</span>
+            {/* posting */}
+            {step === 'posting' && (
+              <div className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black flex items-center justify-center gap-2">
+                <Loader2 size={18} className="animate-spin" />投稿中...
+              </div>
+            )}
+
+            {/* done */}
+            {step === 'done' && (
+              <div className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black flex items-center justify-center gap-2">
+                <CheckCircle2 size={18} />投稿完了！ +{xp} XP 🎉
+              </div>
+            )}
           </div>
         </div>
-
-        {status === 'idle' && (
-          <button type="button" onClick={handleComplete} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-base active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg">
-            <CheckCircle2 size={20} />クエストを完了する
-          </button>
-        )}
-        {status === 'done' && (
-          <div className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 shadow-lg">
-            <CheckCircle2 size={20} />達成認定！ +{xp} XP 🎉
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </>
   );
 };
 
 // ── MapTab ───────────────────────────────────────────────────
-const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete }) => {
+const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId }) => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const mapInstanceRef = useRef(null);
@@ -117,7 +266,6 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const setPOIListRef = useRef(null);
   setPOIListRef.current = setPOIList;
 
-  // ユーザーが手動操作中は追従しない
   const userIsInteractingRef = useRef(false);
   const interactingTimerRef = useRef(null);
 
@@ -155,9 +303,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       setMapInstance(map);
 
       // 手動操作したら追従を永久にオフ（現在地ボタンで手動復帰）
-      const onInteractStart = () => {
-        userIsInteractingRef.current = true;
-      };
+      const onInteractStart = () => { userIsInteractingRef.current = true; };
       map.on('dragstart', onInteractStart);
       map.on('touchstart', onInteractStart);
 
@@ -214,9 +360,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
             xp: (poiType === 'park' || poiType === 'garden') ? 15 : 10,
           });
         });
-        console.log('[POI] POIリスト:', poiDataList.length);
 
-        // Reactステートに渡してオーバーレイで描画
         setPOIListRef.current(poiDataList);
       })();
       // ── POI取得ここまで ──────────────────────────────────
@@ -309,7 +453,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* POIピンオーバーレイ（毎フレーム座標を更新） */}
+      {/* POIピンオーバーレイ */}
       {pinPositions.map((poi, i) => {
         const info = POI_LABELS[poi.poiType] ?? POI_LABELS.mall;
         return (
@@ -326,53 +470,28 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
               zIndex: 10,
             }}
           >
-            {/* ラベル */}
             {poi.name && (
               <div style={{
-                position: 'absolute',
-                top: -20,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'rgba(0,0,0,0.6)',
-                color: 'white',
-                fontSize: 10,
-                fontWeight: 'bold',
-                whiteSpace: 'nowrap',
-                padding: '2px 5px',
-                borderRadius: 4,
-                pointerEvents: 'none',
+                position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)',
+                background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: 10, fontWeight: 'bold',
+                whiteSpace: 'nowrap', padding: '2px 5px', borderRadius: 4, pointerEvents: 'none',
               }}>{poi.name}</div>
             )}
-            {/* ピン本体 */}
             <div style={{
-              width: 36,
-              height: 36,
-              background: info.color,
-              border: '3px solid white',
-              borderRadius: '50% 50% 50% 0',
-              transform: 'rotate(-45deg)',
-              boxShadow: '0 3px 8px rgba(0,0,0,0.35)',
-              position: 'absolute',
-              top: 0,
-              left: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              width: 36, height: 36, background: info.color, border: '3px solid white',
+              borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)',
+              boxShadow: '0 3px 8px rgba(0,0,0,0.35)', position: 'absolute', top: 0, left: 2,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <div style={{ transform: 'rotate(45deg)', fontSize: 17, pointerEvents: 'none' }}>
                 {info.emoji}
               </div>
             </div>
-            {/* 先端 */}
             <div style={{
               width: 0, height: 0,
-              borderLeft: '5px solid transparent',
-              borderRight: '5px solid transparent',
+              borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
               borderTop: `8px solid ${info.color}`,
-              position: 'absolute',
-              bottom: 2,
-              left: 13,
-              pointerEvents: 'none',
+              position: 'absolute', bottom: 2, left: 13, pointerEvents: 'none',
             }} />
           </div>
         );
@@ -389,13 +508,13 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
       {/* 現在地ボタン */}
       <button
-        onClick={() => activeLocation && mapInstance?.easeTo({
-          center: [activeLocation.lng, activeLocation.lat],
-          zoom: MAP_ZOOM,
-          pitch: MAP_PITCH,
-          offset: [0, 80],
-          duration: 600,
-        })}
+        onClick={() => {
+          userIsInteractingRef.current = false;
+          activeLocation && mapInstance?.easeTo({
+            center: [activeLocation.lng, activeLocation.lat],
+            zoom: MAP_ZOOM, pitch: MAP_PITCH, offset: [0, 80], duration: 600,
+          });
+        }}
         style={{
           position: 'absolute', bottom: 180, right: 12, zIndex: 500,
           background: 'white', borderRadius: '50%', width: 44, height: 44,
@@ -406,10 +525,13 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         <Navigation size={20} color="#4f46e5" />
       </button>
 
-      {/* POIクエスト完了モーダル */}
+      {/* POI訪問モーダル */}
       {selectedPOI && (
-        <POIQuestModal
+        <POIVisitModal
           poi={selectedPOI}
+          currentUser={currentUser}
+          db={db}
+          appId={appId}
           onComplete={(poi) => onQuestComplete?.(poi)}
           onClose={() => setSelectedPOI(null)}
         />
