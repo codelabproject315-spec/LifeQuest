@@ -509,6 +509,9 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
       vrm = gltf.userData.vrm;
       VRMUtils.rotateVRM0(vrm);
       vrm.scene.scale.set(1, 1, 1);
+      if (modelPath === '/model3.vrm') {
+        vrm.scene.rotation.y = Math.PI;
+      }
       scene.add(vrm.scene);
     });
 
@@ -520,7 +523,7 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
       t += delta;
       if (vrm) {
         vrm.update(delta);
-        vrm.scene.rotation.y = Math.sin(t * 0.5) * 0.4;
+        vrm.scene.rotation.y = Math.sin(t * 0.5) * 0.4 + (modelPath === '/model3.vrm' ? Math.PI : 0);
         const h = vrm.humanoid;
         if (h) {
           const lUA = h.getNormalizedBoneNode('leftUpperArm');
