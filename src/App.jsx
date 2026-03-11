@@ -249,7 +249,7 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
           <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full h-full object-cover" />
           <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none">
             <button type="button" onClick={handleClose} className="p-3 bg-black/40 text-white rounded-full self-start pointer-events-auto active:scale-90 transition-transform"><X size={24} /></button>
-            <div className="flex flex-col items-center gap-4 pointer-events-auto mb-12">
+            <div className="flex flex-col items-center gap-4 pointer-events-auto mb-24">
               <div className="text-white text-xs font-bold bg-black/50 px-4 py-2 rounded-full border border-white/20 backdrop-blur-sm">証拠を記録してください</div>
               <button type="button" onClick={handleCapture} disabled={!isReady} className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-90 transition-transform shadow-2xl disabled:opacity-50" />
             </div>
