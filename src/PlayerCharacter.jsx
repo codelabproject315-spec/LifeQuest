@@ -116,8 +116,8 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) =
 
           const lUA = humanoid.getNormalizedBoneNode('leftUpperArm');
           const rUA = humanoid.getNormalizedBoneNode('rightUpperArm');
-          if (lUA) {lUA.rotation.x = -armSwing; }
-          if (rUA) {rUA.rotation.x =  armSwing; }
+          if (lUA) { lUA.rotation.z =  Math.PI * 1.5; lUA.rotation.x = -armSwing; }
+          if (rUA) { rUA.rotation.z = -Math.PI * 1.5; rUA.rotation.x =  armSwing; }
 
           const lUL = humanoid.getNormalizedBoneNode('leftUpperLeg');
           const rUL = humanoid.getNormalizedBoneNode('rightUpperLeg');
