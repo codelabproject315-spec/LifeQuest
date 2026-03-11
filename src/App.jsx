@@ -480,7 +480,7 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // �
 };
 
 // ── VRM 3Dプレビュー ──────────────────────────────────────
-const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP }) => {
+const VRMPreview = ({ modelPath, isSelected, onClick, label }) => {
   const canvasRef = React.useRef(null);
   const rendererRef = React.useRef(null);
   const animFrameRef = React.useRef(null);
@@ -509,14 +509,6 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
       vrm = gltf.userData.vrm;
       VRMUtils.rotateVRM0(vrm);
       vrm.scene.scale.set(1, 1, 1);
-      // 初期ポーズがおかしいモデルの腕・手をリセット
-      const h = vrm.humanoid;
-      if (h) {
-        ['leftUpperArm','rightUpperArm','leftLowerArm','rightLowerArm','leftHand','rightHand'].forEach(name => {
-          const bone = h.getNormalizedBoneNode(name);
-          if (bone) bone.rotation.set(0, 0, 0);
-        });
-      }
       scene.add(vrm.scene);
     });
 
@@ -549,30 +541,18 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
   }, [modelPath]);
 
   return (
-    <button type="button" onClick={locked ? undefined : onClick} disabled={locked}
-      className={`flex flex-col items-center gap-1.5 rounded-2xl p-2 border-2 transition-all ${locked ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed' : isSelected ? 'border-indigo-500 bg-indigo-50 shadow-md active:scale-95' : 'border-slate-100 bg-slate-50 active:scale-95'}`}>
-      <div className="relative" style={{ width: 120, height: 160 }}>
-        <canvas ref={canvasRef} width={120} height={160} className="rounded-xl" style={{ width: 120, height: 160, filter: locked ? 'grayscale(1) blur(1px)' : 'none' }} />
-        {locked && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/40">
-            <span className="text-2xl">🔒</span>
-            <span className="text-white text-[11px] font-black mt-1">{requiredXP}XP</span>
-          </div>
-        )}
-      </div>
-      <span className={`text-xs font-black ${locked ? 'text-slate-400' : isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>{label}</span>
-      {isSelected && !locked && <span className="text-[10px] text-indigo-400 font-bold">✓ 選択中</span>}
-      {locked && <span className="text-[10px] text-slate-400 font-bold">ロック中</span>}
+    <button type="button" onClick={onClick}
+      className={`flex flex-col items-center gap-1.5 rounded-2xl p-2 border-2 transition-all active:scale-95 ${isSelected ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-100 bg-slate-50'}`}>
+      <canvas ref={canvasRef} width={120} height={160} className="rounded-xl" style={{ width: 120, height: 160 }} />
+      <span className={`text-xs font-black ${isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>{label}</span>
+      {isSelected && <span className="text-[10px] text-indigo-400 font-bold">✓ 選択中</span>}
     </button>
   );
 };
 
 const VRM_CHARACTERS = [
-  { path: '/model.vrm',  label: 'まさと', requiredXP: 0 },
-  { path: '/model1.vrm', label: 'ゆい',   requiredXP: 0 },
-  { path: '/model2.vrm', label: 'めい',   requiredXP: 500 },
-  { path: '/model3.vrm', label: 'りこ',   requiredXP: 1000 },
-  { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
+  { path: '/model.vrm',  label: 'まさと' },
+  { path: '/model1.vrm', label: 'ゆい' },
 ];
 
 // ── ProfileEditModal ──────────────────────────────────────
@@ -620,21 +600,16 @@ const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
 
         <p className="text-xs font-black text-slate-500 mb-3 uppercase tracking-wider">キャラクター</p>
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          {VRM_CHARACTERS.map(c => {
-            const locked = (currentUser.totalXP || 0) < c.requiredXP;
-            return (
-              <VRMPreview
-                key={c.path}
-                modelPath={c.path}
-                label={c.label}
-                isSelected={selectedModel === c.path}
-                onClick={() => !locked && setSelectedModel(c.path)}
-                locked={locked}
-                requiredXP={c.requiredXP}
-              />
-            );
-          })}
+        <div className="flex gap-3 justify-center mb-5">
+          {VRM_CHARACTERS.map(c => (
+            <VRMPreview
+              key={c.path}
+              modelPath={c.path}
+              label={c.label}
+              isSelected={selectedModel === c.path}
+              onClick={() => setSelectedModel(c.path)}
+            />
+          ))}
         </div>
 
         <p className="text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">アバター</p>
