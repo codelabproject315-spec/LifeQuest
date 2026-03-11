@@ -102,11 +102,12 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
               <button type="button" onClick={handleClose} className="p-3 bg-black/40 text-white rounded-full active:scale-90 transition-transform">
                 <X size={24} />
               </button>
-              <button type="button" onClick={handleFlip} className="p-3 bg-black/40 text-white rounded-full active:scale-90 transition-transform">
-                <Camera size={24} />
+              <button type="button" onClick={handleFlip} className="flex items-center gap-1.5 px-4 py-2.5 bg-black/40 text-white rounded-full active:scale-90 transition-transform text-xs font-bold">
+                <Camera size={18} />
+                <span>カメラ切替</span>
               </button>
             </div>
-            <div className="flex flex-col items-center gap-4 pointer-events-auto mb-12">
+            <div className="flex flex-col items-center gap-4 pointer-events-auto mb-24">
               <div className="text-white text-xs font-bold bg-black/50 px-4 py-2 rounded-full border border-white/20">
                 📍 この場所の写真を撮ってください
               </div>
@@ -493,7 +494,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
               width: 40,
               height: 48,
               cursor: 'pointer',
-              zIndex: 10,
+              zIndex: 5,
             }}
           >
             {poi.name && (
@@ -542,7 +543,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           });
         }}
         style={{
-          position: 'absolute', bottom: 180, right: 12, zIndex: 500,
+          position: 'absolute', bottom: 180, right: 12, zIndex: 50,
           background: 'white', borderRadius: '50%', width: 44, height: 44,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer',
