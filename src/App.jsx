@@ -1,6 +1,9 @@
 import MapTab from './MapTab';
 import PlaceFeed from './PlaceFeed'; // ← 追加
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, onSnapshot, getDoc, deleteDoc } from 'firebase/firestore';
@@ -476,6 +479,82 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // �
   );
 };
 
+// ── VRM 3Dプレビュー ──────────────────────────────────────
+const VRMPreview = ({ modelPath, isSelected, onClick, label }) => {
+  const canvasRef = React.useRef(null);
+  const rendererRef = React.useRef(null);
+  const animFrameRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let vrm = null;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+    camera.position.set(0, 1.4, 3.5);
+    camera.lookAt(0, 1.0, 0);
+
+    scene.add(new THREE.DirectionalLight(0xffffff, 1.2));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(120, 160);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    rendererRef.current = renderer;
+
+    const loader = new GLTFLoader();
+    loader.register(p => new VRMLoaderPlugin(p));
+    loader.load(modelPath, (gltf) => {
+      vrm = gltf.userData.vrm;
+      VRMUtils.rotateVRM0(vrm);
+      vrm.scene.scale.set(1, 1, 1);
+      scene.add(vrm.scene);
+    });
+
+    let t = 0;
+    const clock = new THREE.Clock();
+    const animate = () => {
+      animFrameRef.current = requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      t += delta;
+      if (vrm) {
+        vrm.update(delta);
+        vrm.scene.rotation.y = Math.sin(t * 0.5) * 0.4;
+        const h = vrm.humanoid;
+        if (h) {
+          const lUA = h.getNormalizedBoneNode('leftUpperArm');
+          const rUA = h.getNormalizedBoneNode('rightUpperArm');
+          if (lUA) lUA.rotation.z = -Math.PI * 0.4;
+          if (rUA) rUA.rotation.z = Math.PI * 0.4;
+        }
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+      renderer.dispose();
+      if (vrm) VRMUtils.deepDispose(vrm.scene);
+    };
+  }, [modelPath]);
+
+  return (
+    <button type="button" onClick={onClick}
+      className={`flex flex-col items-center gap-1.5 rounded-2xl p-2 border-2 transition-all active:scale-95 ${isSelected ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-100 bg-slate-50'}`}>
+      <canvas ref={canvasRef} width={120} height={160} className="rounded-xl" style={{ width: 120, height: 160 }} />
+      <span className={`text-xs font-black ${isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>{label}</span>
+      {isSelected && <span className="text-[10px] text-indigo-400 font-bold">✓ 選択中</span>}
+    </button>
+  );
+};
+
+const VRM_CHARACTERS = [
+  { path: '/model.vrm',  label: 'まさと' },
+  { path: '/model1.vrm', label: 'ゆい' },
+];
+
 // ── ProfileEditModal ──────────────────────────────────────
 const AVATAR_SEEDS = ['adventurer','hero','ninja','wizard','knight','samurai','ranger','mage','rogue','paladin','bard','druid'];
 
@@ -484,6 +563,7 @@ const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
   const [email, setEmail] = useState(currentUser.email);
   const [password, setPassword] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(currentUser.avatar);
+  const [selectedModel, setSelectedModel] = useState(currentUser.modelPath || '/model.vrm');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -500,6 +580,7 @@ const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
         name: name.trim(),
         email: email.trim(),
         avatar: selectedAvatar,
+        modelPath: selectedModel,
         ...(password ? { password } : {}),
       };
       await onSave(updated);
@@ -517,6 +598,19 @@ const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
         </div>
 
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
+
+        <p className="text-xs font-black text-slate-500 mb-3 uppercase tracking-wider">キャラクター</p>
+        <div className="flex gap-3 justify-center mb-5">
+          {VRM_CHARACTERS.map(c => (
+            <VRMPreview
+              key={c.path}
+              modelPath={c.path}
+              label={c.label}
+              isSelected={selectedModel === c.path}
+              onClick={() => setSelectedModel(c.path)}
+            />
+          ))}
+        </div>
 
         <p className="text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">アバター</p>
         <div className="grid grid-cols-6 gap-2 mb-5">
@@ -1447,6 +1541,7 @@ export default function App() {
               currentUser={currentUser}
               db={db}
               appId={appId}
+              modelPath={currentUser?.modelPath || '/model.vrm'}
               onQuestComplete={(poi) => {
                 handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
               }}
