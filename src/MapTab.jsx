@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import PlayerCharacter from './PlayerCharacter.jsx';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
-const MAP_ZOOM = 17;
+const MAP_ZOOM = 18;
 const MAP_PITCH = 85;
 
 const POI_LABELS = {
