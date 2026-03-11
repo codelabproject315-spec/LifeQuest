@@ -526,8 +526,8 @@ const VRMPreview = ({ modelPath, isSelected, onClick, label, locked, requiredXP 
           const lUA = h.getNormalizedBoneNode('leftUpperArm');
           const rUA = h.getNormalizedBoneNode('rightUpperArm');
           if (modelPath === '/model3.vrm') {
-            if (lUA) lUA.rotation.z = -Math.PI * 1.4;
-            if (rUA) rUA.rotation.z =  Math.PI * 1.4;
+            if (lUA) lUA.rotation.z = -Math.PI * 1.6;
+            if (rUA) rUA.rotation.z =  Math.PI * 1.6;
           } else {
             if (lUA) lUA.rotation.z = -Math.PI * 0.4;
             if (rUA) rUA.rotation.z =  Math.PI * 0.4;
