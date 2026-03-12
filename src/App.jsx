@@ -721,17 +721,13 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
           const vrm = gltf.userData.vrm;
           const isVRM0 = vrm.meta?.metaVersion === '0';
           if (isVRM0) {
+            // VRM0はrotateVRM0で正面向きに修正してからさらにMath.PI回転
             VRMUtils.rotateVRM0(vrm);
-          } else {
-            // VRM1は後ろ向きの場合があるのでMath.PIで正面に
-            if (vrm.scene.rotation.y === 0) {
-              // デフォルトのまま（正面向き）
-            }
+            s.rotations[c.path] = Math.PI;
           }
+          // VRM1はそのまま（rotateVRM0不要、デフォルトで正面向き）
           scene.add(vrm.scene);
           s.vrms[c.path] = vrm;
-          // ロード後にmetaVersionをログ（デバッグ用）
-          console.log('[VRM]', c.path, 'metaVersion:', vrm.meta?.metaVersion);
         });
       });
     });
