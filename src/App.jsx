@@ -652,149 +652,145 @@ const VRM_CHARACTERS = [
   { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
-// ── キャラ選択全画面（1体フルスクリーン＋ドラッグ360°回転） ──
-const CharacterViewer = ({ modelPath, rotationY, onDragStart, onDrag, onDragEnd, locked }) => {
+// ── キャラ選択全画面（全キャラ事前ロード＋ドラッグ360°回転） ──
+// 1つのcanvasに全キャラをロードしておき、表示切り替えはscene visibility
+const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }) => {
   const canvasRef = React.useRef(null);
-  const vrmRef = React.useRef(null);
-  const animFrameRef = React.useRef(null);
-  const baseRotationRef = React.useRef(rotationY);
+  const stateRef = React.useRef({
+    vrms: {},        // path → vrm
+    scenes: {},      // path → THREE.Scene
+    rotations: {},   // path → rotationY
+    currentPath: null,
+    renderer: null,
+    camera: null,
+    animFrame: null,
+    clock: null,
+  });
 
-  // rotationYが外から変わったらbaseRotationを更新
-  React.useEffect(() => {
-    baseRotationRef.current = rotationY;
-  }, [rotationY]);
+  const initIdx = VRM_CHARACTERS.findIndex(c => c.path === selectedModel);
+  const [idx, setIdx] = React.useState(initIdx >= 0 ? initIdx : 0);
+  const idxRef = React.useRef(idx);
+  const dragRef = React.useRef(null);
 
+  const getInitRot = (path) => path === '/model3.vrm' ? Math.PI : 0;
+
+  // 初期化：canvasとrenderer、全キャラのロード
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const s = stateRef.current;
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(22, w / h, 0.1, 20);
-    camera.position.set(0, 0.9, 4.5);
-    camera.lookAt(0, 0.8, 0);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
-    dirLight.position.set(1, 2, 2);
-    scene.add(dirLight);
-    scene.add(new THREE.DirectionalLight(0xffffff, 0.5).position.set(-1, 1, -1) && new THREE.DirectionalLight(0x88aaff, 0.4));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    s.camera = new THREE.PerspectiveCamera(22, w / h, 0.1, 20);
+    s.camera.position.set(0, 1.1, 4.5);
+    s.camera.lookAt(0, 1.0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    s.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    s.renderer.setSize(w, h);
+    s.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    s.clock = new THREE.Clock();
 
+    // 全キャラをバックグラウンドでロード
     const loader = new GLTFLoader();
     loader.register(p => new VRMLoaderPlugin(p));
-    let vrm = null;
-    loader.load(modelPath, (gltf) => {
-      vrm = gltf.userData.vrm;
-      vrmRef.current = vrm;
-      VRMUtils.rotateVRM0(vrm);
-      // model3は初期状態で後ろ向きなのでMath.PIを初期値にする
-      if (modelPath === '/model3.vrm') {
-        baseRotationRef.current = Math.PI;
-      }
-      scene.add(vrm.scene);
+
+    VRM_CHARACTERS.forEach(c => {
+      const scene = new THREE.Scene();
+      scene.add(new THREE.DirectionalLight(0xffffff, 1.4).position.set(1, 2, 2) && new THREE.DirectionalLight(0xffffff, 1.4));
+      scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+      dirLight.position.set(1, 2, 2);
+      scene.add(dirLight);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      s.scenes[c.path] = scene;
+      s.rotations[c.path] = getInitRot(c.path);
+
+      loader.load(c.path, (gltf) => {
+        const vrm = gltf.userData.vrm;
+        VRMUtils.rotateVRM0(vrm);
+        scene.add(vrm.scene);
+        s.vrms[c.path] = vrm;
+      });
     });
 
+    // アニメーションループ
     let t = 0;
-    const clock = new THREE.Clock();
     const animate = () => {
-      animFrameRef.current = requestAnimationFrame(animate);
-      const delta = clock.getDelta();
+      s.animFrame = requestAnimationFrame(animate);
+      const delta = s.clock.getDelta();
       t += delta;
-      if (vrm) {
-        vrm.update(delta);
-        // 外部のrotationYを常に参照
-        vrm.scene.rotation.y = baseRotationRef.current;
-        const h = vrm.humanoid;
-        if (h) {
-          const lUA = h.getNormalizedBoneNode('leftUpperArm');
-          const rUA = h.getNormalizedBoneNode('rightUpperArm');
-          const isModel3 = modelPath === '/model3.vrm';
-          if (lUA) lUA.rotation.z = isModel3 ? -Math.PI * 1.6 : -Math.PI * 0.3;
-          if (rUA) rUA.rotation.z = isModel3 ?  Math.PI * 1.6 :  Math.PI * 0.3;
-          // 軽く体を揺らす
-          const spine = h.getNormalizedBoneNode('spine');
-          if (spine) spine.rotation.z = Math.sin(t * 0.8) * 0.02;
-          const hips = h.getNormalizedBoneNode('hips');
-          if (hips) hips.position.y = Math.abs(Math.sin(t * 0.8)) * 0.01;
-        }
+      const currentPath = VRM_CHARACTERS[idxRef.current]?.path;
+      const vrm = s.vrms[currentPath];
+      const scene = s.scenes[currentPath];
+      if (!vrm || !scene) return;
+
+      vrm.update(delta);
+      vrm.scene.rotation.y = s.rotations[currentPath] ?? 0;
+
+      const h = vrm.humanoid;
+      if (h) {
+        const isModel3 = currentPath === '/model3.vrm';
+        const lUA = h.getNormalizedBoneNode('leftUpperArm');
+        const rUA = h.getNormalizedBoneNode('rightUpperArm');
+        if (lUA) lUA.rotation.z = isModel3 ? -Math.PI * 1.6 : -Math.PI * 0.3;
+        if (rUA) rUA.rotation.z = isModel3 ?  Math.PI * 1.6 :  Math.PI * 0.3;
+        const spine = h.getNormalizedBoneNode('spine');
+        if (spine) spine.rotation.z = Math.sin(t * 0.8) * 0.02;
+        const hips = h.getNormalizedBoneNode('hips');
+        if (hips) hips.position.y = Math.abs(Math.sin(t * 0.8)) * 0.01;
       }
-      renderer.render(scene, camera);
+
+      s.renderer.render(scene, s.camera);
     };
     animate();
 
     return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      renderer.dispose();
-      if (vrm) VRMUtils.deepDispose(vrm.scene);
+      cancelAnimationFrame(s.animFrame);
+      s.renderer.dispose();
+      Object.values(s.vrms).forEach(v => VRMUtils.deepDispose(v.scene));
     };
-  }, [modelPath]);
+  }, []);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute', inset: 0,
-        width: '100%', height: '100%',
-        filter: locked ? 'grayscale(0.8) blur(3px)' : 'none',
-        touchAction: 'none',
-      }}
-      onPointerDown={onDragStart}
-      onPointerMove={onDrag}
-      onPointerUp={onDragEnd}
-      onPointerLeave={onDragEnd}
-    />
-  );
-};
+  // idxが変わったらrefも更新
+  React.useEffect(() => { idxRef.current = idx; }, [idx]);
 
-const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }) => {
-  const initIdx = VRM_CHARACTERS.findIndex(c => c.path === selectedModel);
-  const [idx, setIdx] = React.useState(initIdx >= 0 ? initIdx : 0);
-  const getInitRot = (i) => VRM_CHARACTERS[i]?.path === '/model3.vrm' ? Math.PI : 0;
-  const [rotationY, setRotationY] = React.useState(getInitRot(initIdx >= 0 ? initIdx : 0));
-  const dragRef = React.useRef(null); // { startX, startRot }
-  const swipeRef = React.useRef(null); // { startX }
+  // ドラッグで回転
+  const handlePointerDown = (e) => {
+    dragRef.current = { startX: e.clientX, startRot: stateRef.current.rotations[VRM_CHARACTERS[idx]?.path] ?? 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const handlePointerMove = (e) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const path = VRM_CHARACTERS[idx]?.path;
+    if (path) stateRef.current.rotations[path] = dragRef.current.startRot + dx * 0.012;
+  };
+  const handlePointerUp = () => { dragRef.current = null; };
+
+  const goLeft  = () => setIdx(i => Math.max(i - 1, 0));
+  const goRight = () => setIdx(i => Math.min(i + 1, VRM_CHARACTERS.length - 1));
 
   const current = VRM_CHARACTERS[idx];
   const locked = (currentUser.totalXP || 0) < current.requiredXP;
-
-  // ドラッグで回転
-  const handleDragStart = (e) => {
-    dragRef.current = { startX: e.clientX, startRot: rotationY };
-    swipeRef.current = { startX: e.clientX };
-  };
-  const handleDrag = (e) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startX;
-    setRotationY(dragRef.current.startRot + dx * 0.01);
-  };
-  const handleDragEnd = (e) => {
-    dragRef.current = null;
-    swipeRef.current = null;
-  };
-
-  const goLeft  = () => { setIdx(i => { const n = Math.max(i - 1, 0); setRotationY(getInitRot(n)); return n; }); };
-  const goRight = () => { setIdx(i => { const n = Math.min(i + 1, VRM_CHARACTERS.length - 1); setRotationY(getInitRot(n)); return n; }); };
 
   return (
     <div className="fixed inset-0 z-[400] flex flex-col overflow-hidden"
       style={{ background: 'linear-gradient(160deg, #c7d2fe 0%, #bbf7d0 100%)' }}>
 
-      {/* キャラビューワー（全画面） */}
-      <div style={{ position: 'absolute', inset: 0 }}>
-        <CharacterViewer
-          key={current.path}
-          modelPath={current.path}
-          rotationY={rotationY}
-          onDragStart={handleDragStart}
-          onDrag={handleDrag}
-          onDragEnd={handleDragEnd}
-          locked={locked}
-        />
-      </div>
+      {/* キャンバス（全画面） */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          touchAction: 'none',
+          filter: locked ? 'grayscale(0.8) blur(3px)' : 'none',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      />
 
       {/* ロックオーバーレイ */}
       {locked && (
@@ -815,12 +811,12 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
         <div style={{ width: 38 }} />
       </div>
 
-      {/* ドット（何番目か） */}
+      {/* ドット */}
       <div className="relative flex justify-center gap-2 mt-2">
         {VRM_CHARACTERS.map((_, i) => (
           <div key={i} style={{
-            width: i === idx ? 20 : 6, height: 6,
-            borderRadius: 3, background: i === idx ? '#6366f1' : 'rgba(255,255,255,0.6)',
+            width: i === idx ? 20 : 6, height: 6, borderRadius: 3,
+            background: i === idx ? '#6366f1' : 'rgba(255,255,255,0.6)',
             transition: 'all 0.3s',
           }} />
         ))}
@@ -828,10 +824,12 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
 
       {/* 左右矢印 */}
       <div className="absolute left-3 right-3 flex justify-between pointer-events-none" style={{ top: '50%', transform: 'translateY(-50%)' }}>
-        <button type="button" onClick={goLeft} disabled={idx === 0} className="pointer-events-auto p-3 rounded-full bg-white/70 shadow backdrop-blur-sm active:scale-90 transition-all disabled:opacity-20">
+        <button type="button" onClick={goLeft} disabled={idx === 0}
+          className="pointer-events-auto p-3 rounded-full bg-white/70 shadow backdrop-blur-sm active:scale-90 transition-all disabled:opacity-20">
           <ChevronRight size={24} color="#475569" style={{ transform: 'rotate(180deg)' }} />
         </button>
-        <button type="button" onClick={goRight} disabled={idx === VRM_CHARACTERS.length - 1} className="pointer-events-auto p-3 rounded-full bg-white/70 shadow backdrop-blur-sm active:scale-90 transition-all disabled:opacity-20">
+        <button type="button" onClick={goRight} disabled={idx === VRM_CHARACTERS.length - 1}
+          className="pointer-events-auto p-3 rounded-full bg-white/70 shadow backdrop-blur-sm active:scale-90 transition-all disabled:opacity-20">
           <ChevronRight size={24} color="#475569" />
         </button>
       </div>
@@ -850,11 +848,9 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
             🔒 {current.requiredXP} XP で解放
           </div>
         ) : (
-          <button
-            type="button"
+          <button type="button"
             onClick={() => { onSelect(current.path); onClose(); }}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-base shadow-lg active:scale-95 transition-all"
-          >
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-base shadow-lg active:scale-95 transition-all">
             {current.label} で決定 ✓
           </button>
         )}
