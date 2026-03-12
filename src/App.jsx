@@ -682,10 +682,10 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    // カメラ: FOV狭め・少し引いて全身が真ん中に来るよう調整
-    s.camera = new THREE.PerspectiveCamera(20, w / h, 0.1, 20);
-    s.camera.position.set(0, 0.75, 4.0);
-    s.camera.lookAt(0, 0.75, 0);
+    // カメラ: 全身が画面中央に収まるよう調整
+    s.camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 20);
+    s.camera.position.set(0, 0.9, 5.5);
+    s.camera.lookAt(0, 0.9, 0);
 
     s.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     s.renderer.setSize(w, h);
