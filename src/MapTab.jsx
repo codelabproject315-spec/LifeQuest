@@ -304,6 +304,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const [selectedPOI, setSelectedPOI] = useState(null);
   const [poiList, setPOIList] = useState([]);
   const [pinPositions, setPinPositions] = useState([]);
+  const [mapBearing, setMapBearing] = useState(0);
 
   const setSelectedPOIRef = useRef(null);
   setSelectedPOIRef.current = setSelectedPOI;
@@ -312,6 +313,16 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
   const userIsInteractingRef = useRef(false);
   const interactingTimerRef = useRef(null);
+  const headingBearingRef = useRef(0);
+
+  const handleHeadingChange = (headingDeg) => {
+    headingBearingRef.current = headingDeg;
+    const map = mapInstanceRef.current;
+    if (map && !userIsInteractingRef.current) {
+      map.easeTo({ bearing: headingDeg, duration: 500, easing: (t) => t });
+      setMapBearing(headingDeg);
+    }
+  };
 
   const activeLocation = userLocation || (gpsStatus === 'mock'
     ? { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG }
@@ -546,8 +557,9 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           map={mapInstance}
           lat={activeLocation?.lat ?? QUEST_LAT}
           lng={activeLocation?.lng ?? QUEST_LNG}
-          bearing={mapInstance.getBearing()}
+          bearing={mapBearing}
           modelPath={modelPath || '/model.vrm'}
+          onHeadingChange={handleHeadingChange}
         />
       )}
 
@@ -558,6 +570,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           activeLocation && mapInstance?.easeTo({
             center: [activeLocation.lng, activeLocation.lat],
             zoom: MAP_ZOOM, pitch: MAP_PITCH, offset: [0, 80], duration: 600,
+            bearing: headingBearingRef.current,
           });
         }}
         style={{
