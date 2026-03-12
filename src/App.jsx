@@ -683,9 +683,10 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
     const h = window.innerHeight;
 
     // カメラ: 全身が画面中央に収まるよう調整
+    // positionのYを上げてlookAtのYを下げることで全身が見える
     s.camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 20);
-    s.camera.position.set(0, 0.9, 5.5);
-    s.camera.lookAt(0, 0.9, 0);
+    s.camera.position.set(0, 1.5, 5.5);
+    s.camera.lookAt(0, 0.5, 0);
 
     s.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     s.renderer.setSize(w, h);
