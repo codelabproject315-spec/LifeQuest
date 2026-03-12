@@ -296,7 +296,7 @@ const POIVisitModal = ({ poi, currentUser, db, appId, onComplete, onClose }) => 
 };
 
 // ── MapTab ───────────────────────────────────────────────────
-const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath }) => {
+const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading }) => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const mapInstanceRef = useRef(null);
@@ -560,6 +560,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           bearing={mapBearing}
           modelPath={modelPath || '/model.vrm'}
           onHeadingChange={handleHeadingChange}
+          deviceHeading={deviceHeading}
         />
       )}
 
