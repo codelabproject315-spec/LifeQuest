@@ -652,11 +652,21 @@ const VRM_CHARACTERS = [
   { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
-// モジュールレベルのバイナリキャッシュ（画面を開く前から並行ダウンロード開始）
-const _vrmBinaryCache = {};
+// モジュールレベルのVRMキャッシュ（アプリ起動時に全キャラをダウンロード＋パースまで完了させる）
+const _vrmCache = {}; // path → { vrm, isVRM0 } のPromise
 VRM_CHARACTERS.forEach(c => {
-  _vrmBinaryCache[c.path] = fetch(c.path)
+  _vrmCache[c.path] = fetch(c.path)
     .then(r => r.arrayBuffer())
+    .then(buffer => new Promise((resolve) => {
+      const loader = new GLTFLoader();
+      loader.register(p => new VRMLoaderPlugin(p));
+      loader.parse(buffer, '', (gltf) => {
+        const vrm = gltf.userData.vrm;
+        const isVRM0 = vrm.meta?.metaVersion === '0';
+        if (isVRM0) VRMUtils.rotateVRM0(vrm);
+        resolve({ vrm, isVRM0 });
+      }, () => resolve(null));
+    }))
     .catch(() => null);
 });
 
@@ -712,23 +722,13 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       s.scenes[c.path] = scene;
       s.rotations[c.path] = getInitRot(c.path);
 
-      // バイナリキャッシュから各キャラ独立でパース（クロス汚染なし）
-      _vrmBinaryCache[c.path]?.then(buffer => {
-        if (!buffer) return;
-        const loader = new GLTFLoader();
-        loader.register(p => new VRMLoaderPlugin(p));
-        loader.parse(buffer, '', (gltf) => {
-          const vrm = gltf.userData.vrm;
-          const isVRM0 = vrm.meta?.metaVersion === '0';
-          if (isVRM0) {
-            // VRM0はrotateVRM0で正面向きに修正してからさらにMath.PI回転
-            VRMUtils.rotateVRM0(vrm);
-            s.rotations[c.path] = Math.PI;
-          }
-          // VRM1はそのまま（rotateVRM0不要、デフォルトで正面向き）
-          scene.add(vrm.scene);
-          s.vrms[c.path] = vrm;
-        });
+      // 事前パース済みキャッシュから即取得
+      _vrmCache[c.path]?.then(cached => {
+        if (!cached) return;
+        const { vrm, isVRM0 } = cached;
+        if (isVRM0) s.rotations[c.path] = Math.PI;
+        scene.add(vrm.scene);
+        s.vrms[c.path] = vrm;
       });
     });
 
