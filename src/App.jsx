@@ -786,8 +786,8 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
   };
   const handlePointerUp = () => { dragRef.current = null; };
 
-  const goLeft  = () => setIdx(i => Math.max(i - 1, 0));
-  const goRight = () => setIdx(i => Math.min(i + 1, VRM_CHARACTERS.length - 1));
+  const goLeft  = () => { const n = Math.max(idxRef.current - 1, 0); idxRef.current = n; setIdx(n); };
+  const goRight = () => { const n = Math.min(idxRef.current + 1, VRM_CHARACTERS.length - 1); idxRef.current = n; setIdx(n); };
 
   const current = VRM_CHARACTERS[idx];
   const locked = (currentUser.totalXP || 0) < current.requiredXP;
