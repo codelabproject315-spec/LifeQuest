@@ -274,6 +274,8 @@ const CameraOverlay = ({ isOpen, onClose, onCapture }) => {
 // ── GPS Hook ──────────────────────────────────────────────
 const useGeolocation = () => {
   const [location, setLocation] = useState(null);
+  const [gpsSpeed, setGpsSpeed] = useState(null); // m/s
+  const [gpsHeading, setGpsHeading] = useState(null); // 度 北=0
   const [gpsStatus, setGpsStatus] = useState('loading');
   const watchId = useRef(null);
   const QUEST_LAT = 35.6895;
@@ -285,7 +287,13 @@ const useGeolocation = () => {
     setGpsStatus('loading');
     const timeout = setTimeout(() => setGpsStatus('mock'), 5000);
     watchId.current = navigator.geolocation.watchPosition(
-      pos => { clearTimeout(timeout); setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsStatus('ok'); },
+      pos => {
+        clearTimeout(timeout);
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGpsSpeed(pos.coords.speed ?? null);
+        setGpsHeading(pos.coords.heading ?? null);
+        setGpsStatus('ok');
+      },
       () => { clearTimeout(timeout); setGpsStatus('mock'); },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
     );
@@ -295,7 +303,7 @@ const useGeolocation = () => {
 
   const mockLocation = { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG };
   const activeLocation = gpsStatus === 'ok' ? location : (gpsStatus === 'mock' ? mockLocation : null);
-  return { location: activeLocation, gpsStatus, mockOffset, setMockOffset, retryGPS: tryRealGPS, QUEST_LAT, QUEST_LNG };
+  return { location: activeLocation, gpsStatus, gpsSpeed, gpsHeading, mockOffset, setMockOffset, retryGPS: tryRealGPS, QUEST_LAT, QUEST_LNG };
 };
 
 // ── デバイスのコンパス方向を取得するhook ───────────────────
@@ -1463,7 +1471,7 @@ export default function App() {
   const [notification, setNotification] = useState(null); // { type: 'levelup'|'badge', data }
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-  const { location: userLocation, gpsStatus, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
+  const { location: userLocation, gpsStatus, gpsSpeed, gpsHeading, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
   const deviceHeading = useDeviceHeading();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
@@ -1783,6 +1791,8 @@ export default function App() {
               appId={appId}
               modelPath={currentUser?.modelPath || '/model.vrm'}
               deviceHeading={deviceHeading}
+              gpsSpeed={gpsSpeed}
+              gpsHeading={gpsHeading}
               onQuestComplete={(poi) => {
                 handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
               }}
