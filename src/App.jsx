@@ -652,35 +652,48 @@ const VRM_CHARACTERS = [
   { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
-// ── キャラ選択全画面 ──────────────────────────────────────
-const VRMPreviewLarge = ({ modelPath, isSelected, onClick, label, locked, requiredXP }) => {
+// ── キャラ選択全画面（1体フルスクリーン＋ドラッグ360°回転） ──
+const CharacterViewer = ({ modelPath, rotationY, onDragStart, onDrag, onDragEnd, locked }) => {
   const canvasRef = React.useRef(null);
-  const rendererRef = React.useRef(null);
+  const vrmRef = React.useRef(null);
   const animFrameRef = React.useRef(null);
+  const baseRotationRef = React.useRef(rotationY);
+
+  // rotationYが外から変わったらbaseRotationを更新
+  React.useEffect(() => {
+    baseRotationRef.current = rotationY;
+  }, [rotationY]);
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let vrm = null;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
-    camera.position.set(0, 1.4, 3.5);
-    camera.lookAt(0, 1.0, 0);
-    scene.add(new THREE.DirectionalLight(0xffffff, 1.2));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 20);
+    camera.position.set(0, 1.3, 3.2);
+    camera.lookAt(0, 0.9, 0);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    dirLight.position.set(1, 2, 2);
+    scene.add(dirLight);
+    scene.add(new THREE.DirectionalLight(0xffffff, 0.5).position.set(-1, 1, -1) && new THREE.DirectionalLight(0x88aaff, 0.4));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setSize(200, 280);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    rendererRef.current = renderer;
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
     const loader = new GLTFLoader();
     loader.register(p => new VRMLoaderPlugin(p));
+    let vrm = null;
     loader.load(modelPath, (gltf) => {
       vrm = gltf.userData.vrm;
+      vrmRef.current = vrm;
       VRMUtils.rotateVRM0(vrm);
-      vrm.scene.scale.set(1, 1, 1);
-      if (modelPath === '/model3.vrm') vrm.scene.rotation.y = Math.PI;
       scene.add(vrm.scene);
     });
+
     let t = 0;
     const clock = new THREE.Clock();
     const animate = () => {
@@ -689,23 +702,26 @@ const VRMPreviewLarge = ({ modelPath, isSelected, onClick, label, locked, requir
       t += delta;
       if (vrm) {
         vrm.update(delta);
-        vrm.scene.rotation.y = Math.sin(t * 0.5) * 0.4 + (modelPath === '/model3.vrm' ? Math.PI : 0);
+        // 外部のrotationYを常に参照
+        vrm.scene.rotation.y = baseRotationRef.current;
         const h = vrm.humanoid;
         if (h) {
           const lUA = h.getNormalizedBoneNode('leftUpperArm');
           const rUA = h.getNormalizedBoneNode('rightUpperArm');
-          if (modelPath === '/model3.vrm') {
-            if (lUA) lUA.rotation.z = -Math.PI * 1.6;
-            if (rUA) rUA.rotation.z =  Math.PI * 1.6;
-          } else {
-            if (lUA) lUA.rotation.z = -Math.PI * 0.4;
-            if (rUA) rUA.rotation.z =  Math.PI * 0.4;
-          }
+          const isModel3 = modelPath === '/model3.vrm';
+          if (lUA) lUA.rotation.z = isModel3 ? -Math.PI * 1.6 : -Math.PI * 0.3;
+          if (rUA) rUA.rotation.z = isModel3 ?  Math.PI * 1.6 :  Math.PI * 0.3;
+          // 軽く体を揺らす
+          const spine = h.getNormalizedBoneNode('spine');
+          if (spine) spine.rotation.z = Math.sin(t * 0.8) * 0.02;
+          const hips = h.getNormalizedBoneNode('hips');
+          if (hips) hips.position.y = Math.abs(Math.sin(t * 0.8)) * 0.01;
         }
       }
       renderer.render(scene, camera);
     };
     animate();
+
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       renderer.dispose();
@@ -714,75 +730,146 @@ const VRMPreviewLarge = ({ modelPath, isSelected, onClick, label, locked, requir
   }, [modelPath]);
 
   return (
-    <button
-      type="button"
-      onClick={locked ? undefined : onClick}
-      disabled={locked}
-      className={`flex flex-col items-center gap-2 rounded-3xl p-3 border-3 transition-all relative
-        ${locked ? 'opacity-60 cursor-not-allowed' : 'active:scale-95'}
-        ${isSelected ? 'border-indigo-500 bg-indigo-50 shadow-xl shadow-indigo-200' : 'border-transparent bg-white/60'}`}
-      style={{ border: isSelected ? '3px solid #6366f1' : '3px solid transparent' }}
-    >
-      <div className="relative" style={{ width: 200, height: 280 }}>
-        <canvas ref={canvasRef} width={200} height={280} className="rounded-2xl" style={{ width: 200, height: 280, filter: locked ? 'grayscale(1) blur(2px)' : 'none' }} />
-        {locked && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-black/50">
-            <span className="text-4xl">🔒</span>
-            <span className="text-white text-sm font-black mt-2">{requiredXP} XP</span>
-            <span className="text-white/70 text-xs font-bold">で解放</span>
-          </div>
-        )}
-        {isSelected && !locked && (
-          <div className="absolute top-2 right-2 bg-indigo-500 rounded-full w-7 h-7 flex items-center justify-center shadow-lg">
-            <CheckCircle size={16} color="white" />
-          </div>
-        )}
-      </div>
-      <span className={`text-sm font-black ${locked ? 'text-slate-400' : isSelected ? 'text-indigo-600' : 'text-slate-700'}`}>{label}</span>
-    </button>
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute', inset: 0,
+        width: '100%', height: '100%',
+        filter: locked ? 'grayscale(0.8) blur(3px)' : 'none',
+        touchAction: 'none',
+      }}
+      onPointerDown={onDragStart}
+      onPointerMove={onDrag}
+      onPointerUp={onDragEnd}
+      onPointerLeave={onDragEnd}
+    />
   );
 };
 
 const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }) => {
+  const initIdx = VRM_CHARACTERS.findIndex(c => c.path === selectedModel);
+  const [idx, setIdx] = React.useState(initIdx >= 0 ? initIdx : 0);
+  const [rotationY, setRotationY] = React.useState(0);
+  const dragRef = React.useRef(null); // { startX, startRot }
+  const swipeRef = React.useRef(null); // { startX }
+
+  const current = VRM_CHARACTERS[idx];
+  const locked = (currentUser.totalXP || 0) < current.requiredXP;
+
+  // ドラッグで回転
+  const handleDragStart = (e) => {
+    dragRef.current = { startX: e.clientX, startRot: rotationY };
+    swipeRef.current = { startX: e.clientX };
+  };
+  const handleDrag = (e) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    setRotationY(dragRef.current.startRot + dx * 0.01);
+  };
+  const handleDragEnd = (e) => {
+    // スワイプ判定: 60px以上動いて、ドラッグ回転量が少ない場合はキャラ切り替え
+    if (swipeRef.current && dragRef.current) {
+      const totalDx = e.clientX - swipeRef.current.startX;
+      const rotDelta = Math.abs(e.clientX - dragRef.current.startX);
+      if (rotDelta < 15) {
+        // ほぼタップ → 選択
+      } else if (Math.abs(totalDx) > 60) {
+        // スワイプ → キャラ切り替え
+        setIdx(prev => {
+          const next = totalDx < 0
+            ? Math.min(prev + 1, VRM_CHARACTERS.length - 1)
+            : Math.max(prev - 1, 0);
+          setRotationY(0);
+          return next;
+        });
+      }
+    }
+    dragRef.current = null;
+    swipeRef.current = null;
+  };
+
+  const goLeft  = () => { setIdx(i => Math.max(i - 1, 0)); setRotationY(0); };
+  const goRight = () => { setIdx(i => Math.min(i + 1, VRM_CHARACTERS.length - 1)); setRotationY(0); };
+
   return (
-    <div className="fixed inset-0 z-[400] flex flex-col" style={{ background: 'linear-gradient(160deg, #e0e7ff 0%, #f0fdf4 100%)' }}>
+    <div className="fixed inset-0 z-[400] flex flex-col overflow-hidden"
+      style={{ background: 'linear-gradient(160deg, #c7d2fe 0%, #bbf7d0 100%)' }}>
+
+      {/* キャラビューワー（全画面） */}
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <CharacterViewer
+          key={current.path}
+          modelPath={current.path}
+          rotationY={rotationY}
+          onDragStart={handleDragStart}
+          onDrag={handleDrag}
+          onDragEnd={handleDragEnd}
+          locked={locked}
+        />
+      </div>
+
+      {/* ロックオーバーレイ */}
+      {locked && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-7xl mb-3">🔒</span>
+          <span className="text-white font-black text-2xl drop-shadow-lg">{current.requiredXP} XP で解放</span>
+        </div>
+      )}
+
       {/* ヘッダー */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-4">
-        <button type="button" onClick={onClose} className="p-2 rounded-full bg-white/80 shadow active:scale-90 transition-transform">
+      <div className="relative flex items-center justify-between px-5 pt-12 pb-2">
+        <button type="button" onClick={onClose} className="p-2 rounded-full bg-white/70 shadow active:scale-90 transition-transform backdrop-blur-sm">
           <X size={22} color="#475569" />
         </button>
-        <h2 className="font-black text-lg text-slate-800">キャラクター選択</h2>
+        <div className="bg-white/70 backdrop-blur-sm px-5 py-2 rounded-full shadow">
+          <span className="font-black text-slate-800">{current.label}</span>
+        </div>
         <div style={{ width: 38 }} />
       </div>
 
-      {/* キャラ一覧 横スクロール */}
-      <div className="flex-1 flex items-center overflow-x-auto px-6 gap-4 pb-8" style={{ scrollSnapType: 'x mandatory' }}>
-        {VRM_CHARACTERS.map(c => {
-          const locked = (currentUser.totalXP || 0) < c.requiredXP;
-          return (
-            <div key={c.path} style={{ scrollSnapAlign: 'center', flexShrink: 0 }}>
-              <VRMPreviewLarge
-                modelPath={c.path}
-                label={c.label}
-                isSelected={selectedModel === c.path}
-                onClick={() => !locked && onSelect(c.path)}
-                locked={locked}
-                requiredXP={c.requiredXP}
-              />
-            </div>
-          );
-        })}
+      {/* ドット（何番目か） */}
+      <div className="relative flex justify-center gap-2 mt-2">
+        {VRM_CHARACTERS.map((_, i) => (
+          <div key={i} style={{
+            width: i === idx ? 20 : 6, height: 6,
+            borderRadius: 3, background: i === idx ? '#6366f1' : 'rgba(255,255,255,0.6)',
+            transition: 'all 0.3s',
+          }} />
+        ))}
+      </div>
+
+      {/* 左右矢印 */}
+      <div className="absolute left-3 right-3 flex justify-between pointer-events-none" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+        <button type="button" onClick={goLeft} disabled={idx === 0} className="pointer-events-auto p-3 rounded-full bg-white/70 shadow backdrop-blur-sm active:scale-90 transition-all disabled:opacity-20">
+          <ChevronRight size={24} color="#475569" style={{ transform: 'rotate(180deg)' }} />
+        </button>
+        <button type="button" onClick={goRight} disabled={idx === VRM_CHARACTERS.length - 1} className="pointer-events-auto p-3 rounded-full bg-white/70 shadow backdrop-blur-sm active:scale-90 transition-all disabled:opacity-20">
+          <ChevronRight size={24} color="#475569" />
+        </button>
+      </div>
+
+      {/* 回転ヒント */}
+      <div className="absolute bottom-36 left-0 right-0 flex justify-center pointer-events-none">
+        <div className="bg-black/30 backdrop-blur-sm text-white text-xs font-bold px-4 py-2 rounded-full">
+          ↔ ドラッグで回転
+        </div>
       </div>
 
       {/* 決定ボタン */}
-      <div className="px-6 pb-12">
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-base shadow-lg active:scale-95 transition-all"
-        >
-          このキャラで決定 ✓
-        </button>
+      <div className="absolute bottom-0 left-0 right-0 px-6 pb-12">
+        {locked ? (
+          <div className="w-full py-4 bg-slate-400 text-white rounded-2xl font-black text-base text-center">
+            🔒 {current.requiredXP} XP で解放
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { onSelect(current.path); onClose(); }}
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-base shadow-lg active:scale-95 transition-all"
+          >
+            {current.label} で決定 ✓
+          </button>
+        )}
       </div>
     </div>
   );
