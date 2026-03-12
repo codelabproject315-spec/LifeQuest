@@ -1370,7 +1370,7 @@ const judgePhotoWithRekognition = async (questId, imageBase64) => {
 };
 
 // ── QuestCard ──────────────────────────────────────────────
-const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked }) => {
+const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked, db, appId, currentUser }) => {
   const [status, setStatus] = useState('idle'); // idle | uploading | approved | rejected | expired
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [judgeResult, setJudgeResult] = useState(null);
@@ -1397,6 +1397,25 @@ const QuestCard = ({ quest, onComplete, onExpire, userLocation, isChainLocked })
     setJudgeResult(result);
     if (result.approved) {
       setStatus('approved');
+
+      // ── 写真保存（追加） ──────────────────────────
+      try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'quest_photos'), {
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userAvatar: currentUser.avatar,
+          questId: quest.id,
+          questTitle: quest.title,
+          questEmoji: quest.emoji,
+          imageBase64: imageBase64,
+          xp: finalXP + (result.xpBonus || 0),
+          createdAt: Date.now(),
+        });
+      } catch (e) {
+        console.warn('[写真保存] 失敗:', e);
+      }
+      // ── 写真保存ここまで ───────────────────────────
+
       setTimeout(() => onComplete(finalXP + (result.xpBonus || 0)), 1200);
     } else {
       setStatus('rejected');
@@ -1994,6 +2013,9 @@ export default function App() {
                       onExpire={(id) => setCompletedIds(prev => [...prev, id])}
                       userLocation={userLocation}
                       isChainLocked={isChainLocked}
+                      db={db}
+                      appId={appId}
+                      currentUser={currentUser}
                     />
                   );
                 })
