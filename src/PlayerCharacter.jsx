@@ -4,29 +4,23 @@ import * as maplibregl from 'maplibre-gl';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) => {
+const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm', onHeadingChange, deviceHeading }) => {
   const vrmRef = useRef(null);
   const clockRef = useRef(new THREE.Clock());
   const latRef = useRef(lat);
   const lngRef = useRef(lng);
   const bearingRef = useRef(bearing);
-  const headingRef = useRef(null); // nullの間は向き計算をスキップ
+  const headingRef = useRef(null);
 
-  // propsが変わるたびにrefを更新 & 進行方向を計算
+  // deviceHeading（コンパス角度、北=0、時計回り）が来たら向きを更新
   useEffect(() => {
-    const dLat = lat - latRef.current;
-    const dLng = lng - lngRef.current;
-    // 5m以上移動した場合のみ向きを更新（ノイズ対策）
-    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-    if (dist > 0.0001) {
-      const newHeading = Math.atan2(dLat, dLng);
-      if (headingRef.current === null) {
-        headingRef.current = newHeading;
-      } else {
-        // ローパスフィルター: 急激な回転を抑える
-        headingRef.current = headingRef.current * 0.6 + newHeading * 0.4;
-      }
-    }
+    if (deviceHeading == null) return;
+    headingRef.current = (90 - deviceHeading) * (Math.PI / 180);
+    if (onHeadingChange) onHeadingChange(deviceHeading);
+  }, [deviceHeading]);
+
+  // GPS座標・bearingの更新
+  useEffect(() => {
     latRef.current = lat;
     lngRef.current = lng;
     bearingRef.current = bearing;
@@ -82,16 +76,11 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) =
       render: function (gl, matrix) {
         if (!vrmRef.current) return;
 
-        // Quaternionで回転を合成（オイラー角干渉を回避）
-        // 1. まずX軸で90度回転して立たせる
         const qStand = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-        // 2. Z軸で進行方向+bearingを回転
         const bearingRad = -(bearingRef.current ?? 0) * (Math.PI / 180);
         const qFacing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (headingRef.current ?? 0) + bearingRad);
-        // 合成してセット
         vrmRef.current.scene.quaternion.copy(qFacing.multiply(qStand));
 
-        // 緯度経度 → メルカトル座標変換
         const mc = maplibregl.MercatorCoordinate.fromLngLat(
           { lng: lngRef.current ?? 0, lat: latRef.current ?? 0 }, 0
         );
@@ -103,7 +92,6 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) =
         const m = new THREE.Matrix4().fromArray(matrix);
         this.camera.projectionMatrix = m.multiply(modelMatrix);
 
-        // アニメーション更新
         const delta = clockRef.current.getDelta();
         const elapsed = clockRef.current.elapsedTime;
         vrmRef.current.update(delta);
@@ -146,7 +134,6 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm' }) =
       }
     };
 
-    // 既存レイヤーを削除してから追加（再マウント対策）
     try {
       if (map && map.getLayer && map.getLayer('vrm-player-layer')) {
         map.removeLayer('vrm-player-layer');
