@@ -652,6 +652,142 @@ const VRM_CHARACTERS = [
   { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
+// ── キャラ選択全画面 ──────────────────────────────────────
+const VRMPreviewLarge = ({ modelPath, isSelected, onClick, label, locked, requiredXP }) => {
+  const canvasRef = React.useRef(null);
+  const rendererRef = React.useRef(null);
+  const animFrameRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let vrm = null;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+    camera.position.set(0, 1.4, 3.5);
+    camera.lookAt(0, 1.0, 0);
+    scene.add(new THREE.DirectionalLight(0xffffff, 1.2));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(200, 280);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    rendererRef.current = renderer;
+    const loader = new GLTFLoader();
+    loader.register(p => new VRMLoaderPlugin(p));
+    loader.load(modelPath, (gltf) => {
+      vrm = gltf.userData.vrm;
+      VRMUtils.rotateVRM0(vrm);
+      vrm.scene.scale.set(1, 1, 1);
+      if (modelPath === '/model3.vrm') vrm.scene.rotation.y = Math.PI;
+      scene.add(vrm.scene);
+    });
+    let t = 0;
+    const clock = new THREE.Clock();
+    const animate = () => {
+      animFrameRef.current = requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      t += delta;
+      if (vrm) {
+        vrm.update(delta);
+        vrm.scene.rotation.y = Math.sin(t * 0.5) * 0.4 + (modelPath === '/model3.vrm' ? Math.PI : 0);
+        const h = vrm.humanoid;
+        if (h) {
+          const lUA = h.getNormalizedBoneNode('leftUpperArm');
+          const rUA = h.getNormalizedBoneNode('rightUpperArm');
+          if (modelPath === '/model3.vrm') {
+            if (lUA) lUA.rotation.z = -Math.PI * 1.6;
+            if (rUA) rUA.rotation.z =  Math.PI * 1.6;
+          } else {
+            if (lUA) lUA.rotation.z = -Math.PI * 0.4;
+            if (rUA) rUA.rotation.z =  Math.PI * 0.4;
+          }
+        }
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+      renderer.dispose();
+      if (vrm) VRMUtils.deepDispose(vrm.scene);
+    };
+  }, [modelPath]);
+
+  return (
+    <button
+      type="button"
+      onClick={locked ? undefined : onClick}
+      disabled={locked}
+      className={`flex flex-col items-center gap-2 rounded-3xl p-3 border-3 transition-all relative
+        ${locked ? 'opacity-60 cursor-not-allowed' : 'active:scale-95'}
+        ${isSelected ? 'border-indigo-500 bg-indigo-50 shadow-xl shadow-indigo-200' : 'border-transparent bg-white/60'}`}
+      style={{ border: isSelected ? '3px solid #6366f1' : '3px solid transparent' }}
+    >
+      <div className="relative" style={{ width: 200, height: 280 }}>
+        <canvas ref={canvasRef} width={200} height={280} className="rounded-2xl" style={{ width: 200, height: 280, filter: locked ? 'grayscale(1) blur(2px)' : 'none' }} />
+        {locked && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-black/50">
+            <span className="text-4xl">🔒</span>
+            <span className="text-white text-sm font-black mt-2">{requiredXP} XP</span>
+            <span className="text-white/70 text-xs font-bold">で解放</span>
+          </div>
+        )}
+        {isSelected && !locked && (
+          <div className="absolute top-2 right-2 bg-indigo-500 rounded-full w-7 h-7 flex items-center justify-center shadow-lg">
+            <CheckCircle size={16} color="white" />
+          </div>
+        )}
+      </div>
+      <span className={`text-sm font-black ${locked ? 'text-slate-400' : isSelected ? 'text-indigo-600' : 'text-slate-700'}`}>{label}</span>
+    </button>
+  );
+};
+
+const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-[400] flex flex-col" style={{ background: 'linear-gradient(160deg, #e0e7ff 0%, #f0fdf4 100%)' }}>
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between px-5 pt-12 pb-4">
+        <button type="button" onClick={onClose} className="p-2 rounded-full bg-white/80 shadow active:scale-90 transition-transform">
+          <X size={22} color="#475569" />
+        </button>
+        <h2 className="font-black text-lg text-slate-800">キャラクター選択</h2>
+        <div style={{ width: 38 }} />
+      </div>
+
+      {/* キャラ一覧 横スクロール */}
+      <div className="flex-1 flex items-center overflow-x-auto px-6 gap-4 pb-8" style={{ scrollSnapType: 'x mandatory' }}>
+        {VRM_CHARACTERS.map(c => {
+          const locked = (currentUser.totalXP || 0) < c.requiredXP;
+          return (
+            <div key={c.path} style={{ scrollSnapAlign: 'center', flexShrink: 0 }}>
+              <VRMPreviewLarge
+                modelPath={c.path}
+                label={c.label}
+                isSelected={selectedModel === c.path}
+                onClick={() => !locked && onSelect(c.path)}
+                locked={locked}
+                requiredXP={c.requiredXP}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 決定ボタン */}
+      <div className="px-6 pb-12">
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-base shadow-lg active:scale-95 transition-all"
+        >
+          このキャラで決定 ✓
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ── ProfileEditModal ──────────────────────────────────────
 const AVATAR_SEEDS = ['adventurer','hero','ninja','wizard','knight','samurai','ranger','mage','rogue','paladin','bard','druid'];
 
@@ -663,6 +799,7 @@ const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
   const [selectedModel, setSelectedModel] = useState(currentUser.modelPath || '/model.vrm');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showCharSelect, setShowCharSelect] = useState(false);
 
   const handleSave = async () => {
     if (!name.trim() || !email.trim()) { setError('名前とメールアドレスは必須です'); return; }
@@ -696,23 +833,32 @@ const ProfileEditModal = ({ currentUser, onSave, onClose, db, appId }) => {
 
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
 
+        {showCharSelect && (
+          <CharacterSelectScreen
+            currentUser={currentUser}
+            selectedModel={selectedModel}
+            onSelect={setSelectedModel}
+            onClose={() => setShowCharSelect(false)}
+          />
+        )}
+
         <p className="text-xs font-black text-slate-500 mb-3 uppercase tracking-wider">キャラクター</p>
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          {VRM_CHARACTERS.map(c => {
-            const locked = (currentUser.totalXP || 0) < c.requiredXP;
-            return (
-              <VRMPreview
-                key={c.path}
-                modelPath={c.path}
-                label={c.label}
-                isSelected={selectedModel === c.path}
-                onClick={() => !locked && setSelectedModel(c.path)}
-                locked={locked}
-                requiredXP={c.requiredXP}
-              />
-            );
-          })}
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowCharSelect(true)}
+          className="w-full flex items-center justify-between bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 mb-5 active:scale-95 transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🧑‍🦰</span>
+            <div className="text-left">
+              <p className="font-black text-sm text-slate-800">
+                {VRM_CHARACTERS.find(c => c.path === selectedModel)?.label ?? 'キャラ未選択'}
+              </p>
+              <p className="text-xs text-slate-400 font-bold">タップして変更</p>
+            </div>
+          </div>
+          <ChevronRight size={18} color="#94a3b8" />
+        </button>
 
         <p className="text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">アバター</p>
         <div className="grid grid-cols-6 gap-2 mb-5">
