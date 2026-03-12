@@ -305,15 +305,36 @@ const useDeviceHeading = () => {
   useEffect(() => {
     let cleanup = null;
 
+    let smoothed = null;
+    const ALPHA = 0.05; // 小さいほど滑らか・鈍い
+    const THRESHOLD = 3; // 3度未満の変化は無視
+
     const handleOrientation = (e) => {
-      // iOS: webkitCompassHeading (北=0, 時計回り)
-      // Android: alpha (北=0, 反時計回りのことが多い)
+      let raw = null;
       if (e.webkitCompassHeading != null) {
-        setDeviceHeading(e.webkitCompassHeading);
+        raw = e.webkitCompassHeading;
       } else if (e.alpha != null) {
-        // Androidのalphaは反時計回りなので変換
-        setDeviceHeading((360 - e.alpha) % 360);
+        raw = (360 - e.alpha) % 360;
       }
+      if (raw == null) return;
+
+      if (smoothed === null) {
+        smoothed = raw;
+      } else {
+        // 359→0の折り返しを考慮した補間
+        let diff = raw - smoothed;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        smoothed = (smoothed + diff * ALPHA + 360) % 360;
+      }
+
+      setDeviceHeading(prev => {
+        if (prev === null) return smoothed;
+        let d = smoothed - prev;
+        if (d > 180) d -= 360;
+        if (d < -180) d += 360;
+        return Math.abs(d) > THRESHOLD ? smoothed : prev;
+      });
     };
 
     // iOS 13+はpermission要求が必要
