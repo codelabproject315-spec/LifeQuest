@@ -490,6 +490,14 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     }
   }, [activeLocation, mapInstance]);
 
+  // deviceHeadingが変わったら地図のbearingを更新
+  useEffect(() => {
+    if (deviceHeading == null || !mapInstance || userIsInteractingRef.current) return;
+    headingBearingRef.current = deviceHeading;
+    setMapBearing(deviceHeading);
+    mapInstance.easeTo({ bearing: deviceHeading, duration: 300, easing: (t) => t });
+  }, [deviceHeading, mapInstance]);
+
   // 毎フレームPOIの画面座標を再計算
   useEffect(() => {
     if (!mapInstance || poiList.length === 0) return;
