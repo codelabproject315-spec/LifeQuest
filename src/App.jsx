@@ -670,9 +670,9 @@ const CharacterViewer = ({ modelPath, rotationY, onDragStart, onDrag, onDragEnd,
     const w = window.innerWidth;
     const h = window.innerHeight;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 20);
-    camera.position.set(0, 1.3, 3.2);
-    camera.lookAt(0, 0.9, 0);
+    const camera = new THREE.PerspectiveCamera(22, w / h, 0.1, 20);
+    camera.position.set(0, 0.9, 4.5);
+    camera.lookAt(0, 0.8, 0);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
     dirLight.position.set(1, 2, 2);
@@ -691,6 +691,10 @@ const CharacterViewer = ({ modelPath, rotationY, onDragStart, onDrag, onDragEnd,
       vrm = gltf.userData.vrm;
       vrmRef.current = vrm;
       VRMUtils.rotateVRM0(vrm);
+      // model3は初期状態で後ろ向きなのでMath.PIを初期値にする
+      if (modelPath === '/model3.vrm') {
+        baseRotationRef.current = Math.PI;
+      }
       scene.add(vrm.scene);
     });
 
@@ -749,7 +753,8 @@ const CharacterViewer = ({ modelPath, rotationY, onDragStart, onDrag, onDragEnd,
 const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }) => {
   const initIdx = VRM_CHARACTERS.findIndex(c => c.path === selectedModel);
   const [idx, setIdx] = React.useState(initIdx >= 0 ? initIdx : 0);
-  const [rotationY, setRotationY] = React.useState(0);
+  const getInitRot = (i) => VRM_CHARACTERS[i]?.path === '/model3.vrm' ? Math.PI : 0;
+  const [rotationY, setRotationY] = React.useState(getInitRot(initIdx >= 0 ? initIdx : 0));
   const dragRef = React.useRef(null); // { startX, startRot }
   const swipeRef = React.useRef(null); // { startX }
 
@@ -767,29 +772,12 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
     setRotationY(dragRef.current.startRot + dx * 0.01);
   };
   const handleDragEnd = (e) => {
-    // スワイプ判定: 60px以上動いて、ドラッグ回転量が少ない場合はキャラ切り替え
-    if (swipeRef.current && dragRef.current) {
-      const totalDx = e.clientX - swipeRef.current.startX;
-      const rotDelta = Math.abs(e.clientX - dragRef.current.startX);
-      if (rotDelta < 15) {
-        // ほぼタップ → 選択
-      } else if (Math.abs(totalDx) > 60) {
-        // スワイプ → キャラ切り替え
-        setIdx(prev => {
-          const next = totalDx < 0
-            ? Math.min(prev + 1, VRM_CHARACTERS.length - 1)
-            : Math.max(prev - 1, 0);
-          setRotationY(0);
-          return next;
-        });
-      }
-    }
     dragRef.current = null;
     swipeRef.current = null;
   };
 
-  const goLeft  = () => { setIdx(i => Math.max(i - 1, 0)); setRotationY(0); };
-  const goRight = () => { setIdx(i => Math.min(i + 1, VRM_CHARACTERS.length - 1)); setRotationY(0); };
+  const goLeft  = () => { setIdx(i => { const n = Math.max(i - 1, 0); setRotationY(getInitRot(n)); return n; }); };
+  const goRight = () => { setIdx(i => { const n = Math.min(i + 1, VRM_CHARACTERS.length - 1); setRotationY(getInitRot(n)); return n; }); };
 
   return (
     <div className="fixed inset-0 z-[400] flex flex-col overflow-hidden"
