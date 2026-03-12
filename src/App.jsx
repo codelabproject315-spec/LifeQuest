@@ -1152,9 +1152,6 @@ const QUEST_POOL = [
   { id: 'q_nophone',  title: '半日スマホなし',     description: '6時間スマホを触らない',                xp: 6, rank: 'S', emoji: '📴', category: '健康' },
   { id: 'q_volunteer',title: 'ボランティア',       description: '誰かのために無償で1時間働く',          xp: 6, rank: 'S', emoji: '❤️', category: '社交' },
 
-  // ── 位置クエスト ──────────────────────────────────────────
-  { id: 'q_lib',      title: '図書館へ行く',       description: '図書館エリアに足を運ぶ',               xp: 9, rank: 'B', emoji: '🏛️', category: '冒険', type: 'location', lat: 35.6895, lng: 139.6917, radius: 200 },
-];
 
 // ── 1日6回・時間ランダム配信ロジック ─────────────────────────
 const DAILY_QUEST_KEY = 'lifequest_daily_v3';
