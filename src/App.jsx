@@ -298,6 +298,46 @@ const useGeolocation = () => {
   return { location: activeLocation, gpsStatus, mockOffset, setMockOffset, retryGPS: tryRealGPS, QUEST_LAT, QUEST_LNG };
 };
 
+// ── デバイスのコンパス方向を取得するhook ───────────────────
+const useDeviceHeading = () => {
+  const [deviceHeading, setDeviceHeading] = useState(null);
+
+  useEffect(() => {
+    let cleanup = null;
+
+    const handleOrientation = (e) => {
+      // iOS: webkitCompassHeading (北=0, 時計回り)
+      // Android: alpha (北=0, 反時計回りのことが多い)
+      if (e.webkitCompassHeading != null) {
+        setDeviceHeading(e.webkitCompassHeading);
+      } else if (e.alpha != null) {
+        // Androidのalphaは反時計回りなので変換
+        setDeviceHeading((360 - e.alpha) % 360);
+      }
+    };
+
+    // iOS 13+はpermission要求が必要
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(state => {
+          if (state === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+            cleanup = () => window.removeEventListener('deviceorientation', handleOrientation, true);
+          }
+        })
+        .catch(() => {});
+    } else {
+      window.addEventListener('deviceorientation', handleOrientation, true);
+      cleanup = () => window.removeEventListener('deviceorientation', handleOrientation, true);
+    }
+
+    return () => { if (cleanup) cleanup(); };
+  }, []);
+
+  return deviceHeading;
+};
+
 // ── MockGPSPanel ──────────────────────────────────────────
 const MockGPSPanel = ({ mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
   const mockLocation = { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG };
@@ -1403,6 +1443,7 @@ export default function App() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const { location: userLocation, gpsStatus, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
+  const deviceHeading = useDeviceHeading();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
   const COMPLETED_KEY = 'lifequest_completed_v1';
@@ -1720,6 +1761,7 @@ export default function App() {
               db={db}
               appId={appId}
               modelPath={currentUser?.modelPath || '/model.vrm'}
+              deviceHeading={deviceHeading}
               onQuestComplete={(poi) => {
                 handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
               }}
