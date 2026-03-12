@@ -719,9 +719,19 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
         loader.register(p => new VRMLoaderPlugin(p));
         loader.parse(buffer, '', (gltf) => {
           const vrm = gltf.userData.vrm;
-          VRMUtils.rotateVRM0(vrm);
+          const isVRM0 = vrm.meta?.metaVersion === '0';
+          if (isVRM0) {
+            VRMUtils.rotateVRM0(vrm);
+          } else {
+            // VRM1は後ろ向きの場合があるのでMath.PIで正面に
+            if (vrm.scene.rotation.y === 0) {
+              // デフォルトのまま（正面向き）
+            }
+          }
           scene.add(vrm.scene);
           s.vrms[c.path] = vrm;
+          // ロード後にmetaVersionをログ（デバッグ用）
+          console.log('[VRM]', c.path, 'metaVersion:', vrm.meta?.metaVersion);
         });
       });
     });
