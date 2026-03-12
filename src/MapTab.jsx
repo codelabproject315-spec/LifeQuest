@@ -296,7 +296,7 @@ const POIVisitModal = ({ poi, currentUser, db, appId, onComplete, onClose }) => 
 };
 
 // ── MapTab ───────────────────────────────────────────────────
-const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading }) => {
+const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading, gpsSpeed, gpsHeading }) => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const mapInstanceRef = useRef(null);
@@ -490,13 +490,20 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     }
   }, [activeLocation, mapInstance]);
 
-  // deviceHeadingが変わったら地図のbearingを更新
+  // GPS速度に応じてGPS進行方向とコンパスを切り替えて地図を回転
+  // 1.0m/s(約3.6km/h)以上 → GPS heading優先、それ以下 → コンパス優先
+  const GPS_SPEED_THRESHOLD = 1.0;
   useEffect(() => {
-    if (deviceHeading == null || !mapInstance || userIsInteractingRef.current) return;
-    headingBearingRef.current = deviceHeading;
-    setMapBearing(deviceHeading);
-    mapInstance.easeTo({ bearing: deviceHeading, duration: 300, easing: (t) => t });
-  }, [deviceHeading, mapInstance]);
+    if (!mapInstance || userIsInteractingRef.current) return;
+    const isMoving = gpsSpeed != null && gpsSpeed >= GPS_SPEED_THRESHOLD;
+    const heading = isMoving && gpsHeading != null ? gpsHeading : deviceHeading;
+    if (heading == null) return;
+    headingBearingRef.current = heading;
+    setMapBearing(heading);
+    // 歩行中は素早く・停止中はゆっくり回転
+    const duration = isMoving ? 200 : 500;
+    mapInstance.easeTo({ bearing: heading, duration, easing: (t) => t });
+  }, [deviceHeading, gpsSpeed, gpsHeading, mapInstance]);
 
   // 毎フレームPOIの画面座標を再計算
   useEffect(() => {
