@@ -652,6 +652,14 @@ const VRM_CHARACTERS = [
   { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
+// モジュールレベルのバイナリキャッシュ（画面を開く前から並行ダウンロード開始）
+const _vrmBinaryCache = {};
+VRM_CHARACTERS.forEach(c => {
+  _vrmBinaryCache[c.path] = fetch(c.path)
+    .then(r => r.arrayBuffer())
+    .catch(() => null);
+});
+
 // ── キャラ選択全画面（全キャラ事前ロード＋ドラッグ360°回転） ──
 // 1つのcanvasに全キャラをロードしておき、表示切り替えはscene visibility
 const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }) => {
@@ -672,7 +680,7 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
   const idxRef = React.useRef(idx);
   const dragRef = React.useRef(null);
 
-  const getInitRot = (path) => path === '/model3.vrm' ? Math.PI : 0;
+  const getInitRot = (path) => 0;
 
   // 初期化：canvasとrenderer、全キャラのロード
   React.useEffect(() => {
@@ -704,14 +712,17 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       s.scenes[c.path] = scene;
       s.rotations[c.path] = getInitRot(c.path);
 
-      // loaderを各キャラで独立させてクロス汚染を防ぐ
-      const loader = new GLTFLoader();
-      loader.register(p => new VRMLoaderPlugin(p));
-      loader.load(c.path, (gltf) => {
-        const vrm = gltf.userData.vrm;
-        VRMUtils.rotateVRM0(vrm);
-        scene.add(vrm.scene);
-        s.vrms[c.path] = vrm;
+      // バイナリキャッシュから各キャラ独立でパース（クロス汚染なし）
+      _vrmBinaryCache[c.path]?.then(buffer => {
+        if (!buffer) return;
+        const loader = new GLTFLoader();
+        loader.register(p => new VRMLoaderPlugin(p));
+        loader.parse(buffer, '', (gltf) => {
+          const vrm = gltf.userData.vrm;
+          VRMUtils.rotateVRM0(vrm);
+          scene.add(vrm.scene);
+          s.vrms[c.path] = vrm;
+        });
       });
     });
 
@@ -843,7 +854,7 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       </div>
 
       {/* 決定ボタン */}
-      <div className="absolute bottom-0 left-0 right-0 px-6 pb-12">
+      <div className="absolute bottom-0 left-0 right-0 px-6 pb-4">
         {locked ? (
           <div className="w-full py-4 bg-slate-400 text-white rounded-2xl font-black text-base text-center">
             🔒 {current.requiredXP} XP で解放
