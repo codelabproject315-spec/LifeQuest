@@ -682,23 +682,20 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    s.camera = new THREE.PerspectiveCamera(22, w / h, 0.1, 20);
-    s.camera.position.set(0, 1.1, 4.5);
-    s.camera.lookAt(0, 1.0, 0);
+    // カメラ: FOV狭め・少し引いて全身が真ん中に来るよう調整
+    s.camera = new THREE.PerspectiveCamera(20, w / h, 0.1, 20);
+    s.camera.position.set(0, 0.75, 4.0);
+    s.camera.lookAt(0, 0.75, 0);
 
     s.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     s.renderer.setSize(w, h);
     s.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     s.clock = new THREE.Clock();
 
-    // 全キャラをバックグラウンドでロード
-    const loader = new GLTFLoader();
-    loader.register(p => new VRMLoaderPlugin(p));
-
+    // 全キャラをバックグラウンドでロード（loaderは各キャラ独立）
     VRM_CHARACTERS.forEach(c => {
       const scene = new THREE.Scene();
-      scene.add(new THREE.DirectionalLight(0xffffff, 1.4).position.set(1, 2, 2) && new THREE.DirectionalLight(0xffffff, 1.4));
-      scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      // ライトは1回だけ追加
       const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
       dirLight.position.set(1, 2, 2);
       scene.add(dirLight);
@@ -706,6 +703,9 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       s.scenes[c.path] = scene;
       s.rotations[c.path] = getInitRot(c.path);
 
+      // loaderを各キャラで独立させてクロス汚染を防ぐ
+      const loader = new GLTFLoader();
+      loader.register(p => new VRMLoaderPlugin(p));
       loader.load(c.path, (gltf) => {
         const vrm = gltf.userData.vrm;
         VRMUtils.rotateVRM0(vrm);
