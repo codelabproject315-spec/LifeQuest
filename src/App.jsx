@@ -652,23 +652,32 @@ const VRM_CHARACTERS = [
   { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
-// モジュールレベルのVRMキャッシュ（アプリ起動時に全キャラをダウンロード＋パースまで完了させる）
-const _vrmCache = {}; // path → { vrm, isVRM0 } のPromise
+// モジュールレベルのVRMキャッシュ（ArrayBufferだけ保持・VRMインスタンスはシーンごとに生成）
+const _vrmCache = {}; // path → ArrayBuffer のPromise
 VRM_CHARACTERS.forEach(c => {
   _vrmCache[c.path] = fetch(c.path)
     .then(r => r.arrayBuffer())
-    .then(buffer => new Promise((resolve) => {
+    .catch(() => null);
+});
+
+// ArrayBufferからVRMインスタンスを生成するヘルパー（シーンごとに別インスタンスを作る）
+const loadVRMFromCache = (path) => {
+  const p = _vrmCache[path];
+  if (!p) return Promise.resolve(null);
+  return p.then(buffer => {
+    if (!buffer) return null;
+    return new Promise((resolve) => {
       const loader = new GLTFLoader();
       loader.register(p => new VRMLoaderPlugin(p));
-      loader.parse(buffer, '', (gltf) => {
+      loader.parse(buffer.slice(0), '', (gltf) => {
         const vrm = gltf.userData.vrm;
         const isVRM0 = vrm.meta?.metaVersion === '0';
         if (isVRM0) VRMUtils.rotateVRM0(vrm);
         resolve({ vrm, isVRM0 });
       }, () => resolve(null));
-    }))
-    .catch(() => null);
-});
+    });
+  });
+};
 
 // ── キャラ選択全画面（全キャラ事前ロード＋ドラッグ360°回転） ──
 // 1つのcanvasに全キャラをロードしておき、表示切り替えはscene visibility
@@ -723,7 +732,7 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       s.rotations[c.path] = getInitRot(c.path);
 
       // 事前パース済みキャッシュから即取得
-      _vrmCache[c.path]?.then(cached => {
+      loadVRMFromCache(c.path).then(cached => {
         if (!cached) return;
         const { vrm, isVRM0 } = cached;
         if (isVRM0) s.rotations[c.path] = Math.PI;
@@ -1152,6 +1161,9 @@ const QUEST_POOL = [
   { id: 'q_nophone',  title: '半日スマホなし',     description: '6時間スマホを触らない',                xp: 6, rank: 'S', emoji: '📴', category: '健康' },
   { id: 'q_volunteer',title: 'ボランティア',       description: '誰かのために無償で1時間働く',          xp: 6, rank: 'S', emoji: '❤️', category: '社交' },
 
+  // ── 位置クエスト ──────────────────────────────────────────
+  { id: 'q_lib',      title: '図書館へ行く',       description: '図書館エリアに足を運ぶ',               xp: 9, rank: 'B', emoji: '🏛️', category: '冒険', type: 'location', lat: 35.6895, lng: 139.6917, radius: 200 },
+];
 
 // ── 1日6回・時間ランダム配信ロジック ─────────────────────────
 const DAILY_QUEST_KEY = 'lifequest_daily_v3';
