@@ -649,35 +649,25 @@ const VRM_CHARACTERS = [
   { path: '/model1.vrm', label: 'ゆい',   requiredXP: 0 },
   { path: '/model2.vrm', label: 'めい',   requiredXP: 500 },
   { path: '/model3.vrm', label: 'りこ',   requiredXP: 1000 },
-  { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
-// モジュールレベルのVRMキャッシュ（ArrayBufferだけ保持・VRMインスタンスはシーンごとに生成）
-const _vrmCache = {}; // path → ArrayBuffer のPromise
+// モジュールレベルのVRMキャッシュ（アプリ起動時に全キャラをダウンロード＋パースまで完了させる）
+const _vrmCache = {}; // path → { vrm, isVRM0 } のPromise
 VRM_CHARACTERS.forEach(c => {
   _vrmCache[c.path] = fetch(c.path)
     .then(r => r.arrayBuffer())
-    .catch(() => null);
-});
-
-// ArrayBufferからVRMインスタンスを生成するヘルパー（シーンごとに別インスタンスを作る）
-const loadVRMFromCache = (path) => {
-  const p = _vrmCache[path];
-  if (!p) return Promise.resolve(null);
-  return p.then(buffer => {
-    if (!buffer) return null;
-    return new Promise((resolve) => {
+    .then(buffer => new Promise((resolve) => {
       const loader = new GLTFLoader();
       loader.register(p => new VRMLoaderPlugin(p));
-      loader.parse(buffer.slice(0), '', (gltf) => {
+      loader.parse(buffer, '', (gltf) => {
         const vrm = gltf.userData.vrm;
         const isVRM0 = vrm.meta?.metaVersion === '0';
         if (isVRM0) VRMUtils.rotateVRM0(vrm);
         resolve({ vrm, isVRM0 });
       }, () => resolve(null));
-    });
-  });
-};
+    }))
+    .catch(() => null);
+});
 
 // ── キャラ選択全画面（全キャラ事前ロード＋ドラッグ360°回転） ──
 // 1つのcanvasに全キャラをロードしておき、表示切り替えはscene visibility
@@ -732,7 +722,7 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       s.rotations[c.path] = getInitRot(c.path);
 
       // 事前パース済みキャッシュから即取得
-      loadVRMFromCache(c.path).then(cached => {
+      _vrmCache[c.path]?.then(cached => {
         if (!cached) return;
         const { vrm, isVRM0 } = cached;
         if (isVRM0) s.rotations[c.path] = Math.PI;
@@ -750,12 +740,7 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       const currentPath = VRM_CHARACTERS[idxRef.current]?.path;
       const vrm = s.vrms[currentPath];
       const scene = s.scenes[currentPath];
-      // VRMがまだロード中の場合は画面をクリアして何も描画しない
-      if (!scene) return;
-      if (!vrm) {
-        s.renderer.clear();
-        return;
-      }
+      if (!vrm || !scene) return;
 
       vrm.update(delta);
       vrm.scene.rotation.y = s.rotations[currentPath] ?? 0;
