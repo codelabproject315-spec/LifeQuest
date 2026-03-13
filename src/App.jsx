@@ -750,7 +750,12 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       const currentPath = VRM_CHARACTERS[idxRef.current]?.path;
       const vrm = s.vrms[currentPath];
       const scene = s.scenes[currentPath];
-      if (!vrm || !scene) return;
+      // VRMがまだロード中の場合は画面をクリアして何も描画しない
+      if (!scene) return;
+      if (!vrm) {
+        s.renderer.clear();
+        return;
+      }
 
       vrm.update(delta);
       vrm.scene.rotation.y = s.rotations[currentPath] ?? 0;
