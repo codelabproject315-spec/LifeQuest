@@ -367,6 +367,130 @@ const useDeviceHeading = () => {
   return deviceHeading;
 };
 
+// ── 天気Hook ──────────────────────────────────────────────
+const WEATHER_XP_MULT = {
+  Clear:        { mult: 1.0, label: '☀️ 晴れ',   color: 'text-amber-500',   bg: 'bg-amber-50',   border: 'border-amber-200' },
+  Clouds:       { mult: 1.2, label: '☁️ 曇り',   color: 'text-slate-500',   bg: 'bg-slate-50',   border: 'border-slate-200' },
+  Rain:         { mult: 1.5, label: '🌧️ 雨',     color: 'text-blue-500',    bg: 'bg-blue-50',    border: 'border-blue-200' },
+  Drizzle:      { mult: 1.3, label: '🌦️ 小雨',   color: 'text-blue-400',    bg: 'bg-blue-50',    border: 'border-blue-100' },
+  Thunderstorm: { mult: 2.0, label: '⛈️ 嵐',    color: 'text-purple-600',  bg: 'bg-purple-50',  border: 'border-purple-200' },
+  Snow:         { mult: 2.0, label: '❄️ 雪',     color: 'text-cyan-500',    bg: 'bg-cyan-50',    border: 'border-cyan-200' },
+  Mist:         { mult: 1.2, label: '🌫️ 霧',     color: 'text-slate-400',   bg: 'bg-slate-50',   border: 'border-slate-100' },
+};
+
+const useWeather = (location) => {
+  const [weather, setWeather] = useState(null); // { main, mult, label, color, bg, border }
+  const WEATHER_KEY = 'lifequest_weather_cache';
+
+  useEffect(() => {
+    if (!location) return;
+    // キャッシュ確認（30分有効）
+    try {
+      const cached = JSON.parse(localStorage.getItem(WEATHER_KEY) || 'null');
+      if (cached && Date.now() - cached.ts < 30 * 60 * 1000) {
+        setWeather(cached.data);
+        return;
+      }
+    } catch {}
+
+    const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      // APIキー未設定時はデフォルト（晴れ×1.0）
+      setWeather({ main: 'Clear', ...WEATHER_XP_MULT.Clear });
+      return;
+    }
+
+    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${location.lat}&lon=${location.lng}&appid=${apiKey}`)
+      .then(r => r.json())
+      .then(data => {
+        const main = data.weather?.[0]?.main || 'Clear';
+        const info = WEATHER_XP_MULT[main] || WEATHER_XP_MULT.Clear;
+        const result = { main, ...info };
+        setWeather(result);
+        try { localStorage.setItem(WEATHER_KEY, JSON.stringify({ ts: Date.now(), data: result })); } catch {}
+      })
+      .catch(() => setWeather({ main: 'Clear', ...WEATHER_XP_MULT.Clear }));
+  }, [location?.lat, location?.lng]);
+
+  return weather;
+};
+
+// ── 歩数Hook ──────────────────────────────────────────────
+const STEPS_KEY = 'lifequest_steps_v1';
+const STEPS_XP_PER_1000 = 10;
+
+const usePedometer = () => {
+  const [steps, setSteps] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || 'null');
+      if (saved && saved.dateKey === new Date().toDateString()) return saved.steps;
+    } catch {}
+    return 0;
+  });
+  const [stepsXP, setStepsXP] = useState(0);
+  const baseStepsRef = useRef(null);
+
+  useEffect(() => {
+    // 日付が変わったらリセット
+    const todayKey = new Date().toDateString();
+    try {
+      const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || 'null');
+      if (saved && saved.dateKey !== todayKey) {
+        setSteps(0);
+        localStorage.setItem(STEPS_KEY, JSON.stringify({ dateKey: todayKey, steps: 0, xpAwarded: 0 }));
+      }
+    } catch {}
+
+    if (typeof Accelerometer === 'undefined') return;
+
+    let stepCount = 0;
+    let lastMag = 0;
+    let lastStep = 0;
+    const THRESHOLD = 12;
+    const MIN_INTERVAL = 300; // ms
+
+    let accel;
+    try {
+      accel = new Accelerometer({ frequency: 10 });
+      accel.addEventListener('reading', () => {
+        const mag = Math.sqrt(accel.x ** 2 + accel.y ** 2 + accel.z ** 2);
+        const now = Date.now();
+        if (mag > THRESHOLD && lastMag <= THRESHOLD && now - lastStep > MIN_INTERVAL) {
+          stepCount++;
+          lastStep = now;
+          setSteps(prev => {
+            const next = prev + 1;
+            try {
+              const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || '{}');
+              const xpAwarded = saved.xpAwarded || 0;
+              const newXP = Math.floor(next / 1000) * STEPS_XP_PER_1000;
+              if (newXP > xpAwarded) setStepsXP(newXP - xpAwarded);
+              localStorage.setItem(STEPS_KEY, JSON.stringify({ dateKey: new Date().toDateString(), steps: next, xpAwarded: saved.xpAwarded || 0 }));
+            } catch {}
+            return next;
+          });
+        }
+        lastMag = mag;
+      });
+      accel.start();
+    } catch {}
+
+    return () => { try { accel?.stop(); } catch {} };
+  }, []);
+
+  const claimStepsXP = () => {
+    const xp = stepsXP;
+    setStepsXP(0);
+    try {
+      const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || '{}');
+      localStorage.setItem(STEPS_KEY, JSON.stringify({ ...saved, xpAwarded: (saved.xpAwarded || 0) + xp }));
+    } catch {}
+    return xp;
+  };
+
+  return { steps, stepsXP, claimStepsXP };
+};
+
 // ── MockGPSPanel ──────────────────────────────────────────
 const MockGPSPanel = ({ mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG }) => {
   const mockLocation = { lat: QUEST_LAT + (mockOffset / 111000), lng: QUEST_LNG };
@@ -649,6 +773,7 @@ const VRM_CHARACTERS = [
   { path: '/model1.vrm', label: 'ゆい',   requiredXP: 0 },
   { path: '/model2.vrm', label: 'めい',   requiredXP: 500 },
   { path: '/model3.vrm', label: 'りこ',   requiredXP: 1000 },
+  { path: '/model4.vrm', label: 'はやと', requiredXP: 1500 },
 ];
 
 // モジュールレベルのVRMキャッシュ（アプリ起動時に全キャラをダウンロード＋パースまで完了させる）
@@ -1670,6 +1795,7 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
                     {user.fcmToken ? <Bell size={11} className="text-emerald-400 flex-shrink-0" /> : <BellOff size={11} className="text-slate-300 flex-shrink-0" />}
                   </div>
                   <p className="text-[10px] text-slate-400 font-bold truncate">{user.email}</p>
+                  {user.password && <p className="text-[10px] text-red-300 font-bold truncate">🔑 {user.password}</p>}
                   <p className="text-[10px] text-slate-400 font-bold">Lv.{user.level || 1} · {user.totalXP || 0} XP</p>
                 </div>
                 {!isMe && (
@@ -1707,6 +1833,8 @@ export default function App() {
 
   const { location: userLocation, gpsStatus, gpsSpeed, gpsHeading, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
   const deviceHeading = useDeviceHeading();
+  const weather = useWeather(userLocation);
+  const { steps, stepsXP, claimStepsXP } = usePedometer();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
   const COMPLETED_KEY = 'lifequest_completed_v1';
@@ -1874,6 +2002,9 @@ export default function App() {
 
   const handleQuestComplete = async (questId, reward, questMeta = {}) => {
     if (!currentUser) return;
+    // 天気XP倍率を適用
+    const weatherMult = weather?.mult || 1.0;
+    reward = Math.round(reward * weatherMult);
     let newXp = (currentUser.xp || 0) + reward;
     let newLevel = currentUser.level || 1;
     const maxXP = newLevel * 200;
@@ -1974,6 +2105,34 @@ export default function App() {
       <main className={`flex-1 overflow-y-auto ${activeTab === 'map' ? '' : 'pb-24'}`}>
         {activeTab === 'home' && (
           <div className="px-4 py-4">
+            {/* 天気・歩数バー */}
+            <div className="flex gap-2 mb-3">
+              {weather && (
+                <div className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-2xl border ${weather.bg} ${weather.border}`}>
+                  <span className="text-base">{weather.label.split(' ')[0]}</span>
+                  <div className="flex-1 text-left">
+                    <p className={`text-[10px] font-black ${weather.color}`}>{weather.label.split(' ')[1]}</p>
+                    <p className="text-[9px] text-slate-400 font-bold">XP ×{weather.mult}</p>
+                  </div>
+                </div>
+              )}
+              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-2xl border bg-emerald-50 border-emerald-200">
+                <span className="text-base">👟</span>
+                <div className="flex-1 text-left">
+                  <p className="text-[10px] font-black text-emerald-600">{steps.toLocaleString()} 歩</p>
+                  <div className="w-full h-1.5 bg-emerald-100 rounded-full mt-0.5">
+                    <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${Math.min((steps % 1000) / 10, 100)}%` }} />
+                  </div>
+                </div>
+                {stepsXP > 0 && (
+                  <button type="button" onClick={async () => { const xp = claimStepsXP(); if (xp > 0) await handleQuestComplete('steps_reward_' + Date.now(), xp, {}); }}
+                    className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-lg active:scale-90 transition-transform">
+                    +{stepsXP}XP
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* ランク凡例 */}
             <div className="flex gap-1.5 mb-3 flex-wrap">
               {Object.entries(RANKS).map(([k, r]) => (
