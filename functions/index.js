@@ -31,10 +31,12 @@ const sendQuestNotifications = async () => {
   const now = Date.now();
   const seed = Math.floor(now / 86400000);
   const schedule = buildDailySchedule(seed);
-  const WINDOW = 10 * 60 * 1000;
 
+  // 直近10分以内に deliverAt があるクエストを対象に
+  // ただし「送信済み」フラグをFirestoreで管理して重複送信を防ぐ
+  const WINDOW = 10 * 60 * 1000;
   const dueTasks = schedule.filter(
-    (q) => q.deliverAt >= now && q.deliverAt < now + WINDOW
+    (q) => q.deliverAt >= now - WINDOW && q.deliverAt < now
   );
 
   if (dueTasks.length === 0) {
@@ -42,50 +44,74 @@ const sendQuestNotifications = async () => {
     return { sent: 0, failed: 0 };
   }
 
-  const snapshot = await db
+  // 送信済みチェック
+  const sentRef = db
     .collection('artifacts')
     .doc(APP_ID)
     .collection('public')
     .doc('data')
-    .collection('users')
-    .where('fcmToken', '!=', null)
-    .get();
+    .collection('sentNotifications');
 
-  if (snapshot.empty) {
-    console.log('No users with FCM tokens');
-    return { sent: 0, failed: 0 };
+  const results = [];
+  for (const task of dueTasks) {
+    const docId = `${seed}-${task.index}`;
+    const sentDoc = await sentRef.doc(docId).get();
+    if (sentDoc.exists) {
+      console.log(`Quest ${task.index} already sent, skipping`);
+      continue;
+    }
+
+    // 送信済みフラグを立てる
+    await sentRef.doc(docId).set({ sentAt: Date.now(), index: task.index });
+
+    // ユーザーに送信
+    const snapshot = await db
+      .collection('artifacts')
+      .doc(APP_ID)
+      .collection('public')
+      .doc('data')
+      .collection('users')
+      .where('fcmToken', '!=', null)
+      .get();
+
+    if (snapshot.empty) {
+      console.log('No users with FCM tokens');
+      continue;
+    }
+
+    const messaging = getMessaging();
+    const seen = new Set();
+    const tokens = snapshot.docs
+      .map(d => d.data().fcmToken)
+      .filter(t => { if (!t || seen.has(t)) return false; seen.add(t); return true; });
+
+    const sendResults = await Promise.allSettled(
+      tokens.map((token) => messaging.send({
+        token,
+        notification: {
+          title: '⚡ クエスト到着！',
+          body: `新しいクエストが届いた！5分以内にクリアせよ！`,
+        },
+        webpush: {
+          notification: {
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: `lifequest-quest-${task.index}`,
+            renotify: true,
+            requireInteraction: true,
+          },
+          fcmOptions: { link: '/' },
+        },
+      }))
+    );
+
+    const sent = sendResults.filter(r => r.status === 'fulfilled').length;
+    const failed = sendResults.filter(r => r.status === 'rejected').length;
+    console.log(`Quest ${task.index} 送信完了: ${sent}件成功, ${failed}件失敗`);
+    results.push({ index: task.index, sent, failed });
   }
 
-  const messaging = getMessaging();
-  const seen = new Set();
-  const tokens = snapshot.docs
-    .map(d => d.data().fcmToken)
-    .filter(t => { if (!t || seen.has(t)) return false; seen.add(t); return true; });
-
-  const results = await Promise.allSettled(
-    tokens.map((token) => messaging.send({
-      token,
-      notification: {
-        title: '⚡ クエスト到着！',
-        body: '新しいクエストが届いた！5分以内にクリアせよ！',
-      },
-      webpush: {
-        notification: {
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: 'lifequest-quest',
-          renotify: true,
-          requireInteraction: true,
-        },
-        fcmOptions: { link: '/' },
-      },
-    }))
-  );
-
-  const sent = results.filter(r => r.status === 'fulfilled').length;
-  const failed = results.filter(r => r.status === 'rejected').length;
-  console.log(`送信完了: ${sent}件成功, ${failed}件失敗`);
-  return { sent, failed };
+  return results;
 };
 
 // 10分ごとに自動実行
