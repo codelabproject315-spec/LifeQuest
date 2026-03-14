@@ -379,7 +379,7 @@ const WEATHER_XP_MULT = {
 };
 
 const useWeather = (location) => {
-  const [weather, setWeather] = useState(null); // { main, mult, label, color, bg, border }
+  const [weather, setWeather] = useState({ main: 'Clear', ...WEATHER_XP_MULT.Clear }); // デフォルト晴れ
   const WEATHER_KEY = 'lifequest_weather_cache';
 
   useEffect(() => {
