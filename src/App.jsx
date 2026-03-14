@@ -428,10 +428,22 @@ const usePedometer = () => {
     return 0;
   });
   const [stepsXP, setStepsXP] = useState(0);
-  const baseStepsRef = useRef(null);
+  const [permissionGranted, setPermissionGranted] = useState(false);
 
-  useEffect(() => {
-    // 日付が変わったらリセット
+  const saveSteps = (next) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || '{}');
+      const xpAwarded = saved.xpAwarded || 0;
+      const newXP = Math.floor(next / 1000) * STEPS_XP_PER_1000;
+      if (newXP > xpAwarded) setStepsXP(prev => prev + (newXP - xpAwarded));
+      localStorage.setItem(STEPS_KEY, JSON.stringify({
+        dateKey: new Date().toDateString(), steps: next, xpAwarded
+      }));
+    } catch {}
+  };
+
+  const startMotion = () => {
+    // 日付リセット
     const todayKey = new Date().toDateString();
     try {
       const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || 'null');
@@ -441,42 +453,61 @@ const usePedometer = () => {
       }
     } catch {}
 
-    if (typeof Accelerometer === 'undefined') return;
+    // 加速度ベースの歩数カウント
+    let lastMag = 9.8;
+    let lastStepTime = 0;
+    const THRESHOLD_HIGH = 11.5; // 上閾値
+    const THRESHOLD_LOW  = 8.0;  // 下閾値
+    const MIN_INTERVAL   = 250;  // ms（最速4歩/秒）
+    let aboveThreshold = false;
 
-    let stepCount = 0;
-    let lastMag = 0;
-    let lastStep = 0;
-    const THRESHOLD = 12;
-    const MIN_INTERVAL = 300; // ms
+    const handler = (e) => {
+      const a = e.accelerationIncludingGravity || e.acceleration;
+      if (!a) return;
+      const mag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+      const now = Date.now();
 
-    let accel;
-    try {
-      accel = new Accelerometer({ frequency: 10 });
-      accel.addEventListener('reading', () => {
-        const mag = Math.sqrt(accel.x ** 2 + accel.y ** 2 + accel.z ** 2);
-        const now = Date.now();
-        if (mag > THRESHOLD && lastMag <= THRESHOLD && now - lastStep > MIN_INTERVAL) {
-          stepCount++;
-          lastStep = now;
+      // ピーク検出：高閾値を超えてから低閾値を下回ったら1歩
+      if (mag > THRESHOLD_HIGH) {
+        aboveThreshold = true;
+      } else if (aboveThreshold && mag < THRESHOLD_LOW) {
+        aboveThreshold = false;
+        if (now - lastStepTime > MIN_INTERVAL) {
+          lastStepTime = now;
           setSteps(prev => {
             const next = prev + 1;
-            try {
-              const saved = JSON.parse(localStorage.getItem(STEPS_KEY) || '{}');
-              const xpAwarded = saved.xpAwarded || 0;
-              const newXP = Math.floor(next / 1000) * STEPS_XP_PER_1000;
-              if (newXP > xpAwarded) setStepsXP(newXP - xpAwarded);
-              localStorage.setItem(STEPS_KEY, JSON.stringify({ dateKey: new Date().toDateString(), steps: next, xpAwarded: saved.xpAwarded || 0 }));
-            } catch {}
+            saveSteps(next);
             return next;
           });
         }
-        lastMag = mag;
-      });
-      accel.start();
-    } catch {}
+      }
+      lastMag = mag;
+    };
 
-    return () => { try { accel?.stop(); } catch {} };
+    window.addEventListener('devicemotion', handler);
+    setPermissionGranted(true);
+    return () => window.removeEventListener('devicemotion', handler);
+  };
+
+  useEffect(() => {
+    // iOSはpermission要求が必要
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+      // iOSはユーザージェスチャーが必要なので自動起動しない
+      return;
+    }
+    // Android・その他は自動起動
+    const cleanup = startMotion();
+    return cleanup;
   }, []);
+
+  // iOSのpermission要求（ボタンタップ時に呼ぶ）
+  const requestPermission = async () => {
+    if (typeof DeviceMotionEvent?.requestPermission === 'function') {
+      const result = await DeviceMotionEvent.requestPermission();
+      if (result === 'granted') startMotion();
+    }
+  };
 
   const claimStepsXP = () => {
     const xp = stepsXP;
@@ -488,7 +519,7 @@ const usePedometer = () => {
     return xp;
   };
 
-  return { steps, stepsXP, claimStepsXP };
+  return { steps, stepsXP, claimStepsXP, permissionGranted, requestPermission };
 };
 
 // ── MockGPSPanel ──────────────────────────────────────────
@@ -1834,7 +1865,7 @@ export default function App() {
   const { location: userLocation, gpsStatus, gpsSpeed, gpsHeading, mockOffset, setMockOffset, retryGPS, QUEST_LAT, QUEST_LNG } = useGeolocation();
   const deviceHeading = useDeviceHeading();
   const weather = useWeather(userLocation);
-  const { steps, stepsXP, claimStepsXP } = usePedometer();
+  const { steps, stepsXP, claimStepsXP, permissionGranted, requestPermission } = usePedometer();
 
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
   const COMPLETED_KEY = 'lifequest_completed_v1';
@@ -2124,6 +2155,12 @@ export default function App() {
                     <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${Math.min((steps % 1000) / 10, 100)}%` }} />
                   </div>
                 </div>
+                {!permissionGranted && typeof DeviceMotionEvent?.requestPermission === 'function' && (
+                  <button type="button" onClick={requestPermission}
+                    className="px-2 py-1 bg-indigo-500 text-white text-[10px] font-black rounded-lg active:scale-90 transition-transform">
+                    許可
+                  </button>
+                )}
                 {stepsXP > 0 && (
                   <button type="button" onClick={async () => { const xp = claimStepsXP(); if (xp > 0) await handleQuestComplete('steps_reward_' + Date.now(), xp, {}); }}
                     className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-lg active:scale-90 transition-transform">
