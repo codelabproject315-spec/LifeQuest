@@ -1826,7 +1826,6 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
                     {user.fcmToken ? <Bell size={11} className="text-emerald-400 flex-shrink-0" /> : <BellOff size={11} className="text-slate-300 flex-shrink-0" />}
                   </div>
                   <p className="text-[10px] text-slate-400 font-bold truncate">{user.email}</p>
-                  {user.password && <p className="text-[10px] text-red-300 font-bold truncate">🔑 {user.password}</p>}
                   <p className="text-[10px] text-slate-400 font-bold">Lv.{user.level || 1} · {user.totalXP || 0} XP</p>
                 </div>
                 {!isMe && (
