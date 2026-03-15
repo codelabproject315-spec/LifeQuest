@@ -381,30 +381,41 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       };
       map.on('dragstart', onInteractStart);
 
-      // 通常モード: 1本指タッチを回転に変換するカスタムハンドラ
-      let lastTouchX = null;
+      // 通常モード: 1本指タッチを回転に変換（画面中心からの角度変化で計算）
+      let lastAngle = null;
+      const getAngle = (touch) => {
+        const canvas = map.getCanvas();
+        const rect = canvas.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        return Math.atan2(touch.clientY - cy, touch.clientX - cx) * (180 / Math.PI);
+      };
       const onTouchStart = (e) => {
         if (demoModeRef.current) return;
         if (e.touches.length !== 1) return;
-        lastTouchX = e.touches[0].clientX;
+        lastAngle = getAngle(e.touches[0]);
         userIsInteractingRef.current = true;
       };
       const onTouchMove = (e) => {
         if (demoModeRef.current) return;
-        if (e.touches.length !== 1 || lastTouchX === null) return;
+        if (e.touches.length !== 1 || lastAngle === null) return;
         e.preventDefault();
-        const dx = e.touches[0].clientX - lastTouchX;
-        lastTouchX = e.touches[0].clientX;
-        const newBearing = map.getBearing() + dx * 0.8;
+        const angle = getAngle(e.touches[0]);
+        let delta = angle - lastAngle;
+        // 180度の折り返しを補正
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        lastAngle = angle;
+        const newBearing = map.getBearing() + delta;
         map.setBearing(newBearing);
         setMapBearing(newBearing);
         headingBearingRef.current = newBearing;
       };
-      const onTouchEnd = () => { lastTouchX = null; };
-      const canvas = map.getCanvas();
-      canvas.addEventListener('touchstart', onTouchStart, { passive: true });
-      canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-      canvas.addEventListener('touchend', onTouchEnd);
+      const onTouchEnd = () => { lastAngle = null; };
+      const canvasEl = map.getCanvas();
+      canvasEl.addEventListener('touchstart', onTouchStart, { passive: true });
+      canvasEl.addEventListener('touchmove', onTouchMove, { passive: false });
+      canvasEl.addEventListener('touchend', onTouchEnd);
 
       // 初期状態（通常モード）でパンのみ無効、回転は1本指でできるよう残す
       if (!demoModeRef.current) {
