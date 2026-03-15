@@ -2320,6 +2320,7 @@ export default function App() {
               gpsSpeed={gpsSpeed}
               gpsHeading={gpsHeading}
               demoMode={demoMode}
+              setDemoMode={setDemoMode}
               onQuestComplete={(poi) => {
                 handleQuestComplete('poi_' + poi.poiType, poi.xp, { isLocation: true });
               }}
