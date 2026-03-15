@@ -395,7 +395,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         if (e.touches.length !== 1 || touchStartX === null) return;
         e.preventDefault();
         const dx = e.touches[0].clientX - touchStartX;
-        const newBearing = touchStartBearing + dx * 0.3;
+        const newBearing = touchStartBearing + dx * 0.8;
         map.setBearing(newBearing);
         setMapBearing(newBearing);
         headingBearingRef.current = newBearing;
