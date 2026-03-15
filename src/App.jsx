@@ -95,12 +95,14 @@ const checkNewBadges = (user) => {
 
 // ── XPBar ─────────────────────────────────────────────────
 const XPBar = ({ xp, maxXP, level }) => {
-  const pct = Math.min((xp / maxXP) * 100, 100);
+  // 壊れたデータ（xp > maxXP）が保存されている場合も正しく表示
+  const displayXp = Math.min(xp, maxXP);
+  const pct = Math.min((displayXp / maxXP) * 100, 100);
   return (
     <div className="w-full">
       <div className="flex justify-between items-end mb-1">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">経験値 (XP)</span>
-        <span className="text-xs font-black text-indigo-600">{xp} / {maxXP} XP</span>
+        <span className="text-xs font-black text-indigo-600">{displayXp} / {maxXP} XP</span>
       </div>
       <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200 shadow-inner">
         <div className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500 transition-all duration-700 ease-out rounded-full" style={{ width: `${pct}%` }} />
@@ -2081,8 +2083,20 @@ export default function App() {
   };
 
   const handleLoginSuccess = user => {
-    setCurrentUser(user);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    // 壊れたXPデータを自動修復（xp > maxXP になっている場合）
+    let repairedUser = { ...user };
+    let repaired = false;
+    while (repairedUser.xp >= (repairedUser.level || 1) * 200) {
+      repairedUser.xp -= (repairedUser.level || 1) * 200;
+      repairedUser.level = (repairedUser.level || 1) + 1;
+      repaired = true;
+    }
+    if (repaired) {
+      try { updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', repairedUser.id), { xp: repairedUser.xp, level: repairedUser.level }); } catch {}
+    }
+    const user_ = repaired ? repairedUser : user;
+    setCurrentUser(user_);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user_));
     registerPushToken(user.id);
     // 通知タップ起動時のフラグを確認 → ログイン完了後にクエスト追加
     try {
