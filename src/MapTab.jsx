@@ -308,7 +308,7 @@ const calcDistance = (lat1, lng1, lat2, lng2) => {
 const POI_ENTER_RADIUS = 20; // メートル
 
 // ── MapTab ───────────────────────────────────────────────────
-const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading, gpsSpeed, gpsHeading, demoMode }) => {
+const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading, gpsSpeed, gpsHeading, demoMode, setDemoMode }) => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const mapInstanceRef = useRef(null);
@@ -628,6 +628,23 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           deviceHeading={deviceHeading}
         />
       )}
+
+      {/* デモモードボタン */}
+      <button
+        onClick={() => setDemoMode(v => !v)}
+        style={{
+          position: 'absolute', bottom: 230, right: 12, zIndex: 50,
+          background: demoMode ? '#7c3aed' : 'white',
+          borderRadius: 20, padding: '6px 12px',
+          display: 'flex', alignItems: 'center', gap: 5,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer',
+        }}
+      >
+        <span style={{ fontSize: 13 }}>🎮</span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: demoMode ? 'white' : '#64748b' }}>
+          デモ{demoMode ? 'ON' : 'OFF'}
+        </span>
+      </button>
 
       {/* 現在地ボタン */}
       <button
