@@ -354,6 +354,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       style: 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [initLng, initLat],
       zoom: MAP_ZOOM,
+      minZoom: 15,
+      maxZoom: 20,
       pitch: MAP_PITCH,
       bearing: 0,
       antialias: true,
