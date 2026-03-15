@@ -1925,6 +1925,10 @@ export default function App() {
   });
   const [quests, setQuests] = useState(() => getActiveQuests(getOrBuildSchedule(), []));
 
+  const completedIdsRef = useRef([]);
+  const forceShowNextQuestRef = useRef(null);
+  useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
+
   // デモモード時: QUESTプールからランク順に10個を即時表示（時間制限なし）
   const DEMO_QUEST_COUNT = 10;
   const demoQuests = React.useMemo(() => {
@@ -1935,11 +1939,9 @@ export default function App() {
     return sorted.slice(0, DEMO_QUEST_COUNT).map(q => ({
       ...q,
       deliverAt: now - 1000,
-      deadlineTs: now + 24 * 60 * 60 * 1000, // 24時間後
+      deadlineTs: now + 24 * 60 * 60 * 1000,
     }));
   }, []);
-  const forceShowNextQuestRef = useRef(null);
-  useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
 
   const scheduleRef = useRef(schedule);
   // scheduleが変わったら常にquestsを更新
