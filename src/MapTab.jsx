@@ -382,29 +382,25 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map.on('dragstart', onInteractStart);
 
       // 通常モード: 1本指タッチを回転に変換するカスタムハンドラ
-      let touchStartX = null;
-      let touchStartBearing = null;
+      let lastTouchX = null;
       const onTouchStart = (e) => {
         if (demoModeRef.current) return;
         if (e.touches.length !== 1) return;
-        touchStartX = e.touches[0].clientX;
-        touchStartBearing = map.getBearing();
+        lastTouchX = e.touches[0].clientX;
+        userIsInteractingRef.current = true;
       };
       const onTouchMove = (e) => {
         if (demoModeRef.current) return;
-        if (e.touches.length !== 1 || touchStartX === null) return;
+        if (e.touches.length !== 1 || lastTouchX === null) return;
         e.preventDefault();
-        const dx = e.touches[0].clientX - touchStartX;
-        const newBearing = touchStartBearing + dx * 1.6;
+        const dx = e.touches[0].clientX - lastTouchX;
+        lastTouchX = e.touches[0].clientX;
+        const newBearing = map.getBearing() + dx * 0.8;
         map.setBearing(newBearing);
         setMapBearing(newBearing);
         headingBearingRef.current = newBearing;
-        userIsInteractingRef.current = true;
       };
-      const onTouchEnd = () => {
-        touchStartX = null;
-        touchStartBearing = null;
-      };
+      const onTouchEnd = () => { lastTouchX = null; };
       const canvas = map.getCanvas();
       canvas.addEventListener('touchstart', onTouchStart, { passive: true });
       canvas.addEventListener('touchmove', onTouchMove, { passive: false });
