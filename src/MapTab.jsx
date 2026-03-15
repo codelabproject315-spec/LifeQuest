@@ -327,6 +327,8 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
   const userIsInteractingRef = useRef(false);
   const interactingTimerRef = useRef(null);
   const headingBearingRef = useRef(0);
+  const demoModeRef = useRef(demoMode);
+  useEffect(() => { demoModeRef.current = demoMode; }, [demoMode]);
 
   const handleHeadingChange = (headingDeg) => {
     headingBearingRef.current = headingDeg;
@@ -372,23 +374,21 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
 
-      // デモモードのみ: 手動ドラッグしたらカメラ追従を一時オフ
+      // ドラッグ開始: demoModeRef で常に最新値を参照
       const onInteractStart = () => {
-        if (!demoMode) return;
+        if (!demoModeRef.current) return;
         userIsInteractingRef.current = true;
       };
       map.on('dragstart', onInteractStart);
 
-      // 通常モード: 手動回転したらコンパス自動追従を止める（現在地ボタンで復帰）
+      // 手動回転: コンパス自動追従を止める
       const onRotateStart = () => {
         userIsInteractingRef.current = true;
       };
-      if (!demoMode) {
-        map.on('rotatestart', onRotateStart);
-      }
+      map.on('rotatestart', onRotateStart);
 
-      // 通常モード時はパン（移動）のみ無効化。ズーム・回転は許可
-      if (!demoMode) {
+      // 初期状態（通常モード）でパン無効
+      if (!demoModeRef.current) {
         map.dragPan.disable();
         map.touchPitch.disable();
       }
@@ -506,6 +506,20 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // demoModeが変わったらマップ操作を動的に切り替え
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (demoMode) {
+      map.dragPan.enable();
+      map.touchPitch.enable();
+    } else {
+      map.dragPan.disable();
+      map.touchPitch.disable();
+      userIsInteractingRef.current = false; // 通常モードに戻したらカメラ追従再開
+    }
+  }, [demoMode]);
 
   // カメラ追従
   useEffect(() => {
