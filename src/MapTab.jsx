@@ -377,6 +377,14 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       };
       map.on('dragstart', onInteractStart);
 
+      // 通常モード: 手動回転したらコンパス自動追従を止める（現在地ボタンで復帰）
+      const onRotateStart = () => {
+        userIsInteractingRef.current = true;
+      };
+      if (!demoMode) {
+        map.on('rotatestart', onRotateStart);
+      }
+
       // 通常モード時はパン（移動）のみ無効化。ズーム・回転は許可
       if (!demoMode) {
         map.dragPan.disable();
