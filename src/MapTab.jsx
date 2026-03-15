@@ -295,13 +295,26 @@ const POIVisitModal = ({ poi, currentUser, db, appId, onComplete, onClose }) => 
   );
 };
 
+// ── 距離計算（メートル） ──────────────────────────────────────
+const calcDistance = (lat1, lng1, lat2, lng2) => {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+const POI_ENTER_RADIUS = 20; // メートル
+
 // ── MapTab ───────────────────────────────────────────────────
-const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading, gpsSpeed, gpsHeading }) => {
+const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QUEST_LAT, QUEST_LNG, onQuestComplete, currentUser, db, appId, modelPath, deviceHeading, gpsSpeed, gpsHeading, demoMode }) => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const mapInstanceRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
   const [selectedPOI, setSelectedPOI] = useState(null);
+  const [tooFarPOI, setTooFarPOI] = useState(null); // 近づいてメッセージ用
   const [poiList, setPOIList] = useState([]);
   const [pinPositions, setPinPositions] = useState([]);
   const [mapBearing, setMapBearing] = useState(0);
@@ -357,10 +370,22 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
 
-      // 手動操作したら追従を永久にオフ（現在地ボタンで手動復帰）
-      const onInteractStart = () => { userIsInteractingRef.current = true; };
+      // 手動操作したら追従を一時オフ（デモモード時のみ有効）
+      const onInteractStart = () => {
+        if (!demoMode) return; // 通常モードでは操作を無効化
+        userIsInteractingRef.current = true;
+      };
       map.on('dragstart', onInteractStart);
       map.on('touchstart', onInteractStart);
+
+      // 通常モード時はマップ操作を全て無効化
+      if (!demoMode) {
+        map.dragPan.disable();
+        map.scrollZoom.disable();
+        map.touchZoomRotate.disable();
+        map.doubleClickZoom.disable();
+        map.keyboard.disable();
+      }
 
       // ── POI取得 ──────────────────────────────────────────
       const poiLat = activeLocationRef.current?.lat ?? QUEST_LAT;
@@ -526,10 +551,31 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       {/* POIピンオーバーレイ */}
       {pinPositions.map((poi, i) => {
         const info = POI_LABELS[poi.poiType] ?? POI_LABELS.mall;
+        const handlePinClick = () => {
+          if (demoMode) {
+            // デモモード: 距離チェックなし
+            setSelectedPOI(poi);
+            return;
+          }
+          // 通常モード: 半径20m以内かチェック
+          const loc = activeLocation;
+          if (loc) {
+            const dist = calcDistance(loc.lat, loc.lng, poi.lat, poi.lng);
+            if (dist <= POI_ENTER_RADIUS) {
+              setSelectedPOI(poi);
+            } else {
+              setTooFarPOI({ ...poi, dist: Math.round(dist) });
+              setTimeout(() => setTooFarPOI(null), 2500);
+            }
+          } else {
+            setTooFarPOI({ ...poi, dist: null });
+            setTimeout(() => setTooFarPOI(null), 2500);
+          }
+        };
         return (
           <div
             key={i}
-            onClick={() => setSelectedPOI(poi)}
+            onClick={handlePinClick}
             style={{
               position: 'absolute',
               left: poi.x - 20,
@@ -609,6 +655,29 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
           onComplete={(poi) => onQuestComplete?.(poi)}
           onClose={() => setSelectedPOI(null)}
         />
+      )}
+
+      {/* 近づいてトースト（通常モード時） */}
+      {tooFarPOI && (
+        <div style={{
+          position: 'absolute', bottom: 200, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 100, pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: 'rgba(15,15,30,0.85)', backdropFilter: 'blur(8px)',
+            color: 'white', borderRadius: 20, padding: '10px 18px',
+            display: 'flex', alignItems: 'center', gap: 8,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            whiteSpace: 'nowrap', fontSize: 13, fontWeight: 800,
+          }}>
+            <span>📍</span>
+            <span>
+              {tooFarPOI.dist != null
+                ? `もっと近づいて！（あと約${tooFarPOI.dist}m）`
+                : 'もっと近づいて！'}
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );
