@@ -130,9 +130,14 @@ const AuthGateway = ({ onLoginSuccess, isFirebaseReady }) => {
       const col = collection(db, 'artifacts', appId, 'public', 'data', 'users');
       const snap = await getDocs(col);
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // 日付をYYYY-MM-DD形式で扱う（toDateStringは曜日付き英語文字列で日付境界ズレが起きやすいため）
+      const toDateKey = (d) => {
+        const dt = d instanceof Date ? d : new Date(d);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      };
       if (view === 'signup') {
         if (all.find(u => u.email === formData.email)) { setError('このメールアドレスは既に登録されています。'); setLoading(false); return; }
-        const today = new Date().toDateString();
+        const today = toDateKey(new Date());
         const nu = {
           name: formData.name, email: formData.email, password: formData.password,
           xp: 0, level: 1, totalXP: 0, totalCompleted: 0, locationCompleted: 0,
@@ -146,9 +151,10 @@ const AuthGateway = ({ onLoginSuccess, isFirebaseReady }) => {
       } else {
         const user = all.find(u => u.email === formData.email && u.password === formData.password);
         if (!user) { setError('メールアドレスまたはパスワードが間違っています。'); setLoading(false); return; }
-        // ストリーク更新
-        const today = new Date().toDateString();
-        const yesterday = new Date(Date.now() - 86400000).toDateString();
+        // ストリーク更新（YYYY-MM-DD形式で比較することで曜日・夏時間ズレを防ぐ）
+        const today = toDateKey(new Date());
+        const yesterdayDate = new Date(); yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterday = toDateKey(yesterdayDate);
         let streak = user.streak || 1;
         if (user.lastLoginDate === yesterday) streak++;
         else if (user.lastLoginDate !== today) streak = 1;
@@ -941,8 +947,8 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
   };
   const handlePointerUp = () => { dragRef.current = null; };
 
-  const goLeft  = () => setIdx(i => Math.max(i - 1, 0));
-  const goRight = () => setIdx(i => Math.min(i + 1, VRM_CHARACTERS.length - 1));
+  const goLeft  = () => setIdx(i => { const next = Math.max(i - 1, 0); idxRef.current = next; return next; });
+  const goRight = () => setIdx(i => { const next = Math.min(i + 1, VRM_CHARACTERS.length - 1); idxRef.current = next; return next; });
 
   const current = VRM_CHARACTERS[idx];
   const locked = (currentUser.totalXP || 0) < current.requiredXP;
@@ -2037,9 +2043,13 @@ export default function App() {
     reward = Math.round(reward * weatherMult);
     let newXp = (currentUser.xp || 0) + reward;
     let newLevel = currentUser.level || 1;
-    const maxXP = newLevel * 200;
     let leveledUp = false;
-    if (newXp >= maxXP) { newXp -= maxXP; newLevel++; leveledUp = true; }
+    // 複数レベルアップにも対応（大きな報酬でXPがmaxXPを複数回超える場合）
+    while (newXp >= newLevel * 200) {
+      newXp -= newLevel * 200;
+      newLevel++;
+      leveledUp = true;
+    }
 
     const updated = {
       ...currentUser, xp: newXp, level: newLevel,
