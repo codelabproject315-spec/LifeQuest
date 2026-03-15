@@ -387,9 +387,10 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       };
       map.on('rotatestart', onRotateStart);
 
-      // 初期状態（通常モード）でパン無効
+      // 初期状態（通常モード）でパンのみ無効、回転は1本指でできるよう残す
       if (!demoModeRef.current) {
         map.dragPan.disable();
+        map.dragRotate.enable();
         map.touchPitch.disable();
       }
 
@@ -513,11 +514,13 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
     if (!map) return;
     if (demoMode) {
       map.dragPan.enable();
+      map.dragRotate.enable();
       map.touchPitch.enable();
     } else {
       map.dragPan.disable();
+      map.dragRotate.enable(); // 1本指回転は通常モードでも有効
       map.touchPitch.disable();
-      userIsInteractingRef.current = false; // 通常モードに戻したらカメラ追従再開
+      userIsInteractingRef.current = false;
     }
   }, [demoMode]);
 
