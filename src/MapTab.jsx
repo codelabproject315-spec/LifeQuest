@@ -370,21 +370,17 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map._repaintInterval = repaintInterval;
       setMapInstance(map);
 
-      // 手動操作したら追従を一時オフ（デモモード時のみ有効）
+      // デモモードのみ: 手動ドラッグしたらカメラ追従を一時オフ
       const onInteractStart = () => {
-        if (!demoMode) return; // 通常モードでは操作を無効化
+        if (!demoMode) return;
         userIsInteractingRef.current = true;
       };
       map.on('dragstart', onInteractStart);
-      map.on('touchstart', onInteractStart);
 
-      // 通常モード時はマップ操作を全て無効化
+      // 通常モード時はパン（移動）のみ無効化。ズーム・回転は許可
       if (!demoMode) {
         map.dragPan.disable();
-        map.scrollZoom.disable();
-        map.touchZoomRotate.disable();
-        map.doubleClickZoom.disable();
-        map.keyboard.disable();
+        map.touchPitch.disable();
       }
 
       // ── POI取得 ──────────────────────────────────────────
