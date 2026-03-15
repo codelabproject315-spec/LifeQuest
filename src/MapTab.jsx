@@ -406,7 +406,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         if (delta > 180) delta -= 360;
         if (delta < -180) delta += 360;
         lastAngle = angle;
-        const newBearing = map.getBearing() + delta;
+        const newBearing = map.getBearing() - delta;
         map.setBearing(newBearing);
         setMapBearing(newBearing);
         headingBearingRef.current = newBearing;
