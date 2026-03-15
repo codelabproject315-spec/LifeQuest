@@ -909,7 +909,23 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
       const currentPath = VRM_CHARACTERS[idxRef.current]?.path;
       const vrm = s.vrms[currentPath];
       const scene = s.scenes[currentPath];
-      if (!vrm || !scene) return;
+      // VRM未ロード時は直前のキャラを探してフォールバック描画
+      if (!vrm || !scene) {
+        // ロード済みの最も近いキャラを探す
+        let fallbackPath = null;
+        for (let i = idxRef.current - 1; i >= 0; i--) {
+          if (s.vrms[VRM_CHARACTERS[i]?.path]) { fallbackPath = VRM_CHARACTERS[i].path; break; }
+        }
+        if (!fallbackPath) {
+          for (let i = idxRef.current + 1; i < VRM_CHARACTERS.length; i++) {
+            if (s.vrms[VRM_CHARACTERS[i]?.path]) { fallbackPath = VRM_CHARACTERS[i].path; break; }
+          }
+        }
+        if (fallbackPath && s.scenes[fallbackPath]) {
+          s.renderer.render(s.scenes[fallbackPath], s.camera);
+        }
+        return;
+      }
 
       vrm.update(delta);
       vrm.scene.rotation.y = s.rotations[currentPath] ?? 0;
@@ -938,24 +954,24 @@ const CharacterSelectScreen = ({ currentUser, selectedModel, onSelect, onClose }
     };
   }, []);
 
-  // idxが変わったらrefも更新
-  React.useEffect(() => { idxRef.current = idx; }, [idx]);
+  // idxが変わったらrefも更新 ← goLeft/goRight内で即時更新済みなので不要だが念のため残す
+  // React.useEffect(() => { idxRef.current = idx; }, [idx]);
 
   // ドラッグで回転
   const handlePointerDown = (e) => {
-    dragRef.current = { startX: e.clientX, startRot: stateRef.current.rotations[VRM_CHARACTERS[idx]?.path] ?? 0 };
+    dragRef.current = { startX: e.clientX, startRot: stateRef.current.rotations[VRM_CHARACTERS[idxRef.current]?.path] ?? 0 };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const handlePointerMove = (e) => {
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
-    const path = VRM_CHARACTERS[idx]?.path;
+    const path = VRM_CHARACTERS[idxRef.current]?.path;
     if (path) stateRef.current.rotations[path] = dragRef.current.startRot + dx * 0.012;
   };
   const handlePointerUp = () => { dragRef.current = null; };
 
-  const goLeft  = () => setIdx(i => { const next = Math.max(i - 1, 0); idxRef.current = next; return next; });
-  const goRight = () => setIdx(i => { const next = Math.min(i + 1, VRM_CHARACTERS.length - 1); idxRef.current = next; return next; });
+  const goLeft  = () => { const next = Math.max(idxRef.current - 1, 0); idxRef.current = next; setIdx(next); };
+  const goRight = () => { const next = Math.min(idxRef.current + 1, VRM_CHARACTERS.length - 1); idxRef.current = next; setIdx(next); };
 
   const current = VRM_CHARACTERS[idx];
   const locked = (currentUser.totalXP || 0) < current.requiredXP;
