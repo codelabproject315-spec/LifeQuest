@@ -381,11 +381,34 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       };
       map.on('dragstart', onInteractStart);
 
-      // 手動回転: コンパス自動追従を止める
-      const onRotateStart = () => {
+      // 通常モード: 1本指タッチを回転に変換するカスタムハンドラ
+      let touchStartX = null;
+      let touchStartBearing = null;
+      const onTouchStart = (e) => {
+        if (demoModeRef.current) return;
+        if (e.touches.length !== 1) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartBearing = map.getBearing();
+      };
+      const onTouchMove = (e) => {
+        if (demoModeRef.current) return;
+        if (e.touches.length !== 1 || touchStartX === null) return;
+        e.preventDefault();
+        const dx = e.touches[0].clientX - touchStartX;
+        const newBearing = touchStartBearing + dx * 0.3;
+        map.setBearing(newBearing);
+        setMapBearing(newBearing);
+        headingBearingRef.current = newBearing;
         userIsInteractingRef.current = true;
       };
-      map.on('rotatestart', onRotateStart);
+      const onTouchEnd = () => {
+        touchStartX = null;
+        touchStartBearing = null;
+      };
+      const canvas = map.getCanvas();
+      canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+      canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+      canvas.addEventListener('touchend', onTouchEnd);
 
       // 初期状態（通常モード）でパンのみ無効、回転は1本指でできるよう残す
       if (!demoModeRef.current) {
