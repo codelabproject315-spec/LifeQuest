@@ -1910,6 +1910,7 @@ export default function App() {
   const weather = useWeather(userLocation);
   const { steps, stepsXP, claimStepsXP, permissionGranted, requestPermission } = usePedometer();
 
+  const [demoMode, setDemoMode] = useState(false);
   const [schedule, setSchedule] = useState(() => getOrBuildSchedule());
   const COMPLETED_KEY = 'lifequest_completed_v1';
   const [completedIds, setCompletedIds] = useState(() => {
@@ -1924,7 +1925,19 @@ export default function App() {
   });
   const [quests, setQuests] = useState(() => getActiveQuests(getOrBuildSchedule(), []));
 
-  const completedIdsRef = useRef([]);
+  // デモモード時: QUESTプールからランク順に10個を即時表示（時間制限なし）
+  const DEMO_QUEST_COUNT = 10;
+  const demoQuests = React.useMemo(() => {
+    const rankOrder = ['D','C','B','A','S'];
+    const pool = QUEST_POOL.filter(q => q.type !== 'location');
+    const sorted = [...pool].sort((a, b) => rankOrder.indexOf(a.rank) - rankOrder.indexOf(b.rank));
+    const now = Date.now();
+    return sorted.slice(0, DEMO_QUEST_COUNT).map(q => ({
+      ...q,
+      deliverAt: now - 1000,
+      deadlineTs: now + 24 * 60 * 60 * 1000, // 24時間後
+    }));
+  }, []);
   const forceShowNextQuestRef = useRef(null);
   useEffect(() => { completedIdsRef.current = completedIds; }, [completedIds]);
 
@@ -2238,16 +2251,28 @@ export default function App() {
               </div>
             </div>
 
-            {/* ランク凡例 */}
-            <div className="flex gap-1.5 mb-3 flex-wrap">
-              {Object.entries(RANKS).map(([k, r]) => (
-                <span key={k} className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${r.bg} ${r.color} ${r.border}`}>{k} ×{r.xpMult}</span>
-              ))}
+            {/* ランク凡例 + デモモードボタン */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex gap-1.5 flex-wrap flex-1">
+                {Object.entries(RANKS).map(([k, r]) => (
+                  <span key={k} className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${r.bg} ${r.color} ${r.border}`}>{k} ×{r.xpMult}</span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDemoMode(v => !v)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black transition-all active:scale-90 flex-shrink-0 ${demoMode ? 'bg-violet-500 text-white shadow-md' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}
+              >
+                <span>{demoMode ? '🎮' : '🎮'}</span>
+                デモ{demoMode ? 'ON' : 'OFF'}
+              </button>
             </div>
-            <h3 className="font-black text-base text-slate-700 tracking-tight mb-3 text-left uppercase">本日のクエスト</h3>
-            {quests.length > 0
-              ? quests.map(q => {
-                  const prevQuest = quests.find(pq => pq.chainNext === q.id);
+            <h3 className="font-black text-base text-slate-700 tracking-tight mb-3 text-left uppercase">
+              {demoMode ? '🎮 デモクエスト（10件）' : '本日のクエスト'}
+            </h3>
+            {(demoMode ? demoQuests : quests).length > 0
+              ? (demoMode ? demoQuests : quests).map(q => {
+                  const prevQuest = (demoMode ? demoQuests : quests).find(pq => pq.chainNext === q.id);
                   const isChainLocked = !!prevQuest && !completedIds.includes(prevQuest.id);
                   return (
                     <QuestCard
@@ -2261,6 +2286,7 @@ export default function App() {
                   );
                 })
               : (() => {
+                  if (demoMode) return null; // デモモード時は必ず10件表示されるので空状態なし
                   const allDone = schedule.every(q => completedIds.includes(q.id));
                   return (
                     <div className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-slate-200">
