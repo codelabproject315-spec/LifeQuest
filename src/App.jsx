@@ -111,6 +111,11 @@ const XPBar = ({ xp, maxXP, level }) => {
   );
 };
 
+// ── レベルごとの必要XP計算（加速度的増加） ────────────────────
+// Lv1:200, Lv2:400, Lv3:700, Lv4:1100, Lv5:1600, Lv6:2200 ...
+// 式: 100 * lv*(lv+1)/2 + 100
+const getMaxXP = (level) => { const lv = level || 1; return 100 * lv * (lv + 1) / 2 + 100; };
+
 // ── AuthGateway ────────────────────────────────────────────
 const AuthGateway = ({ onLoginSuccess, isFirebaseReady }) => {
   const [view, setView] = useState('landing');
@@ -1863,7 +1868,22 @@ const AdminTab = ({ currentUser, db, appId, allUsers, onUserDeleted }) => {
 // ── Main App ───────────────────────────────────────────────
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
-  const [currentUser, setCurrentUser] = useState(() => { try { const s = localStorage.getItem(SESSION_KEY); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const s = localStorage.getItem(SESSION_KEY);
+      if (!s) return null;
+      let user = JSON.parse(s);
+      // 起動時にも壊れたXPデータを修復
+      let repaired = false;
+      while (user.xp >= getMaxXP(user.level || 1)) {
+        user.xp -= getMaxXP(user.level || 1);
+        user.level = (user.level || 1) + 1;
+        repaired = true;
+      }
+      if (repaired) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      return user;
+    } catch { return null; }
+  });
   const [allUsers, setAllUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('home');
   const [notification, setNotification] = useState(null); // { type: 'levelup'|'badge', data }
@@ -2038,6 +2058,15 @@ export default function App() {
     try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', updated.id), updated); } catch {}
   }, []);
 
+  // 起動時にlocalStorageで修復されたデータをFirestoreにも反映
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const maxXP = getMaxXP(currentUser.level || 1);
+    if ((currentUser.xp || 0) >= maxXP) return; // 修復済みならスキップ
+    // localStorageの値とFirestoreを同期（修復データの書き戻し）
+    try { updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUser.id), { xp: currentUser.xp, level: currentUser.level }); } catch {}
+  }, [currentUser?.id]);
+
   const handleQuestComplete = async (questId, reward, questMeta = {}) => {
     if (!currentUser) return;
     // 天気XP倍率を適用
@@ -2047,8 +2076,8 @@ export default function App() {
     let newLevel = currentUser.level || 1;
     let leveledUp = false;
     // 複数レベルアップにも対応（大きな報酬でXPがmaxXPを複数回超える場合）
-    while (newXp >= newLevel * 200) {
-      newXp -= newLevel * 200;
+    while (newXp >= getMaxXP(newLevel)) {
+      newXp -= getMaxXP(newLevel);
       newLevel++;
       leveledUp = true;
     }
@@ -2086,8 +2115,8 @@ export default function App() {
     // 壊れたXPデータを自動修復（xp > maxXP になっている場合）
     let repairedUser = { ...user };
     let repaired = false;
-    while (repairedUser.xp >= (repairedUser.level || 1) * 200) {
-      repairedUser.xp -= (repairedUser.level || 1) * 200;
+    while (repairedUser.xp >= getMaxXP(repairedUser.level || 1)) {
+      repairedUser.xp -= getMaxXP(repairedUser.level || 1);
       repairedUser.level = (repairedUser.level || 1) + 1;
       repaired = true;
     }
@@ -2117,7 +2146,7 @@ export default function App() {
 
   const gpsLabel = { loading: 'GPS取得中', ok: 'GPS接続中', mock: 'デモモード' }[gpsStatus] || 'GPS';
   const gpsColor = { loading: 'bg-amber-100 text-amber-600', ok: 'bg-emerald-100 text-emerald-600', mock: 'bg-violet-100 text-violet-600' }[gpsStatus] || '';
-  const maxXP = (currentUser.level || 1) * 200;
+  const maxXP = getMaxXP(currentUser.level || 1);
 
   const isAdmin = currentUser.email === ADMIN_EMAIL;
   const tabs = [
