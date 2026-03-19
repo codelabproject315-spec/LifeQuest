@@ -456,7 +456,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         let data = null;
         try {
           console.log('[POI] fetch開始 lat:', poiLat, 'lng:', poiLng);
-          const res = await fetch('https://maps.mail.ru/osm/tools/overpass/api/interpreter', {
+          const res = await fetch('https://overpass-api.de/api/interpreter', {
             method: 'POST', body: query, signal: AbortSignal.timeout(15000),
           });
           data = await res.json();
