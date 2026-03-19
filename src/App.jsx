@@ -6,14 +6,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, getDocs, updateDoc, setDoc, doc, onSnapshot, getDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, setDoc, doc, onSnapshot, getDoc, deleteDoc, query, where, orderBy, limit } from 'firebase/firestore';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import {
   Trophy, Camera, Home, User,
   CheckCircle2, Loader2, MapPin, Zap, X, Mail, Lock,
   AlertCircle, Navigation,
   Sparkles, Users, Map, Award,
-  ChevronRight, Plus, Crown, Trash2, Bell, BellOff, CheckCircle, XCircle
+  ChevronRight, Plus, Crown, Trash2, Bell, BellOff, CheckCircle, XCircle,
+  Search, UserPlus, UserCheck, UserX, Heart
 } from 'lucide-react';
 
 // --- Firebase 設定 ---
@@ -639,24 +640,164 @@ const AIQuestGenerator = ({ onAdd, currentUser }) => {
 };
 
 // ── Social Tab ────────────────────────────────────────────
-const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // ← db, appId を追加
+const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId, onQuestComplete }) => {
   const [tab, setTab] = useState('ranking');
-  const [coopQuests] = useState([
-    { id: 'c1', title: '朝5時起き', desc: '早起きチャレンジ', xp: 80, participants: 3, emoji: '🌅' },
-    { id: 'c2', title: '週3運動', desc: '今週3回運動する', xp: 120, participants: 7, emoji: '💪' },
-    { id: 'c3', title: '読書リレー', desc: '本を1冊読んで感想を共有', xp: 60, participants: 2, emoji: '📚' },
-  ]);
-  const [joining, setJoining] = useState(null);
+
+  // ── フレンドタブ ──
+  const [friendSearch, setFriendSearch] = useState('');
+  const [friendSearchResults, setFriendSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [sendingReq, setSendingReq] = useState(null);
+  const [incomingReqs, setIncomingReqs] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [processingReq, setProcessingReq] = useState(null);
+
+  // ── 協力クエストタブ ──
+  const [coopQuests, setCoopQuests] = useState([]);
+  const [joiningCoop, setJoiningCoop] = useState(null);
 
   const sorted = [...allUsers].sort((a, b) => (b.totalXP || b.xp || 0) - (a.totalXP || a.xp || 0));
   const myRank = sorted.findIndex(u => u.id === currentUser.id) + 1;
 
-  const handleJoin = async (q) => {
-    setJoining(q.id);
-    await new Promise(r => setTimeout(r, 1200));
-    const updated = { ...currentUser, coopCompleted: (currentUser.coopCompleted || 0) + 1, xp: (currentUser.xp || 0) + q.xp, totalXP: (currentUser.totalXP || 0) + q.xp };
-    onUpdateUser(updated);
-    setJoining(null);
+  // フレンド一覧をリアルタイム取得
+  useEffect(() => {
+    if (!db || !appId || !currentUser?.id) return;
+    const col = collection(db, 'artifacts', appId, 'public', 'data', 'friends');
+    const q = query(col, where('userIds', 'array-contains', currentUser.id));
+    const unsub = onSnapshot(q, snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setFriends(list);
+    });
+    return unsub;
+  }, [db, appId, currentUser?.id]);
+
+  // 受信した申請をリアルタイム取得
+  useEffect(() => {
+    if (!db || !appId || !currentUser?.id) return;
+    const col = collection(db, 'artifacts', appId, 'public', 'data', 'friend_requests');
+    const q = query(col, where('toId', '==', currentUser.id), where('status', '==', 'pending'));
+    const unsub = onSnapshot(q, snap => {
+      setIncomingReqs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [db, appId, currentUser?.id]);
+
+  // 協力クエストをリアルタイム取得（フレンドが絡むもの）
+  useEffect(() => {
+    if (!db || !appId || !currentUser?.id || friends.length === 0) return;
+    const col = collection(db, 'artifacts', appId, 'public', 'data', 'coop_quests');
+    const todayKey = new Date().toDateString();
+    const q = query(col, where('dateKey', '==', todayKey), where('memberIds', 'array-contains', currentUser.id));
+    const unsub = onSnapshot(q, snap => {
+      setCoopQuests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [db, appId, currentUser?.id, friends.length]);
+
+  // ユーザー検索
+  const handleSearch = async () => {
+    if (!friendSearch.trim()) return;
+    setSearching(true);
+    const results = allUsers.filter(u =>
+      u.id !== currentUser.id &&
+      u.name?.toLowerCase().includes(friendSearch.trim().toLowerCase())
+    );
+    setFriendSearchResults(results);
+    setSearching(false);
+  };
+
+  // フレンド申請を送る
+  const sendFriendRequest = async (toUser) => {
+    setSendingReq(toUser.id);
+    try {
+      const col = collection(db, 'artifacts', appId, 'public', 'data', 'friend_requests');
+      // 既存の申請チェック
+      const existing = await getDocs(query(col,
+        where('fromId', '==', currentUser.id),
+        where('toId', '==', toUser.id)
+      ));
+      if (!existing.empty) { setSendingReq(null); return; }
+      await addDoc(col, {
+        fromId: currentUser.id,
+        fromName: currentUser.name,
+        fromAvatar: currentUser.avatar,
+        toId: toUser.id,
+        toName: toUser.name,
+        status: 'pending',
+        createdAt: Date.now(),
+      });
+    } catch (e) { console.warn('[FRIEND] 申請失敗:', e); }
+    setSendingReq(null);
+  };
+
+  // 申請を承認
+  const acceptRequest = async (req) => {
+    setProcessingReq(req.id);
+    try {
+      // friend_requestsを承認済みに
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'friend_requests', req.id), { status: 'accepted' });
+      // friendsコレクションに追加
+      const friendsCol = collection(db, 'artifacts', appId, 'public', 'data', 'friends');
+      await addDoc(friendsCol, {
+        userIds: [currentUser.id, req.fromId],
+        names: { [currentUser.id]: currentUser.name, [req.fromId]: req.fromName },
+        avatars: { [currentUser.id]: currentUser.avatar, [req.fromId]: req.fromAvatar },
+        createdAt: Date.now(),
+      });
+    } catch (e) { console.warn('[FRIEND] 承認失敗:', e); }
+    setProcessingReq(null);
+  };
+
+  // 申請を拒否
+  const rejectRequest = async (req) => {
+    setProcessingReq(req.id);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'friend_requests', req.id), { status: 'rejected' });
+    } catch (e) {}
+    setProcessingReq(null);
+  };
+
+  // フレンドかどうか
+  const isFriend = (userId) => friends.some(f => f.userIds.includes(userId));
+  // 申請済みかどうか
+  const [sentReqs, setSentReqs] = useState([]);
+  useEffect(() => {
+    if (!db || !appId || !currentUser?.id) return;
+    const col = collection(db, 'artifacts', appId, 'public', 'data', 'friend_requests');
+    const q = query(col, where('fromId', '==', currentUser.id), where('status', '==', 'pending'));
+    const unsub = onSnapshot(q, snap => setSentReqs(snap.docs.map(d => d.data().toId)));
+    return unsub;
+  }, [db, appId, currentUser?.id]);
+  const isPending = (userId) => sentReqs.includes(userId);
+
+  // フレンドのUserオブジェクトを取得
+  const friendUsers = friends.map(f => {
+    const friendId = f.userIds.find(id => id !== currentUser.id);
+    return allUsers.find(u => u.id === friendId);
+  }).filter(Boolean);
+
+  // 協力クエストをクリア
+  const handleCoopComplete = async (coopQuest) => {
+    setJoiningCoop(coopQuest.id);
+    try {
+      const coopRef = doc(db, 'artifacts', appId, 'public', 'data', 'coop_quests', coopQuest.id);
+      const completedBy = coopQuest.completedBy || [];
+      if (completedBy.includes(currentUser.id)) { setJoiningCoop(null); return; }
+      const newCompletedBy = [...completedBy, currentUser.id];
+      await updateDoc(coopRef, { completedBy: newCompletedBy });
+
+      // 過半数達成チェック
+      const total = coopQuest.memberIds.length;
+      const needed = Math.ceil(total / 2);
+      if (newCompletedBy.length >= needed && !coopQuest.bonusAwarded) {
+        await updateDoc(coopRef, { bonusAwarded: true });
+        // ボーナスXP付与
+        if (onQuestComplete) onQuestComplete('coop_' + coopQuest.id, coopQuest.bonusXP || 30, {});
+      } else {
+        if (onQuestComplete) onQuestComplete('coop_' + coopQuest.id, coopQuest.xp || 10, {});
+      }
+    } catch (e) { console.warn('[COOP] クリア失敗:', e); }
+    setJoiningCoop(null);
   };
 
   return (
@@ -665,13 +806,16 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // �
         <h3 className="font-black text-lg text-slate-800 tracking-tight">ソーシャル</h3>
         {myRank > 0 && <span className="text-xs font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">現在 {myRank}位</span>}
       </div>
-      <div className="flex gap-2 mb-4">
-        {/* ← feedタブを追加 */}
-        {[['ranking', '🏆 ランキング'], ['feed', '📷 フィード'], ['coop', '🤝 協力クエスト']].map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setTab(key)} className={`flex-1 py-2 rounded-xl font-black text-xs transition-all ${tab === key ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>{label}</button>
+      <div className="flex gap-2 mb-4 overflow-x-auto">
+        {[['ranking', '🏆'], ['friends', '👥'], ['feed', '📷'], ['coop', '🤝']].map(([key, icon]) => (
+          <button key={key} type="button" onClick={() => setTab(key)}
+            className={`flex-1 py-2 rounded-xl font-black text-xs transition-all whitespace-nowrap ${tab === key ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>
+            {icon} {key === 'ranking' ? 'ランキング' : key === 'friends' ? 'フレンド' : key === 'feed' ? 'フィード' : '協力'}
+          </button>
         ))}
       </div>
 
+      {/* ランキング */}
       {tab === 'ranking' && (
         <div className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
           {sorted.slice(0, 10).map((u, i) => {
@@ -692,32 +836,203 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId }) => { // �
         </div>
       )}
 
-      {/* ← feedタブの表示 */}
+      {/* フレンド */}
+      {tab === 'friends' && (
+        <div className="space-y-4">
+          {/* 申請が来ている */}
+          {incomingReqs.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+              <p className="text-xs font-black text-amber-700 mb-2">📬 フレンド申請 {incomingReqs.length}件</p>
+              {incomingReqs.map(req => (
+                <div key={req.id} className="flex items-center gap-3">
+                  <img src={req.fromAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.fromName}`} className="w-9 h-9 rounded-xl" alt="" />
+                  <p className="flex-1 font-black text-sm text-slate-800">{req.fromName}</p>
+                  <button type="button" onClick={() => acceptRequest(req)} disabled={processingReq === req.id}
+                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-90 transition-transform disabled:opacity-50">
+                    {processingReq === req.id ? <Loader2 size={12} className="animate-spin" /> : '承認'}
+                  </button>
+                  <button type="button" onClick={() => rejectRequest(req)} disabled={processingReq === req.id}
+                    className="px-3 py-1.5 bg-slate-100 text-slate-500 rounded-xl font-black text-xs active:scale-90 transition-transform">
+                    拒否
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ユーザー検索 */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="ユーザー名で検索..."
+                value={friendSearch} onChange={e => setFriendSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                className="w-full bg-white border border-slate-200 rounded-2xl py-2.5 pl-9 pr-3 text-sm font-bold outline-none focus:border-indigo-400" />
+            </div>
+            <button type="button" onClick={handleSearch} disabled={searching}
+              className="px-4 py-2.5 bg-indigo-600 text-white rounded-2xl font-black text-sm active:scale-90 transition-transform">
+              {searching ? <Loader2 size={14} className="animate-spin" /> : '検索'}
+            </button>
+          </div>
+
+          {/* 検索結果 */}
+          {friendSearchResults.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              {friendSearchResults.map(u => (
+                <div key={u.id} className="flex items-center gap-3 p-3 border-b border-slate-50 last:border-0">
+                  <img src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`} className="w-9 h-9 rounded-xl" alt="" />
+                  <div className="flex-1 text-left">
+                    <p className="font-black text-sm text-slate-800">{u.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">Lv.{u.level || 1} · {u.totalXP || 0} XP</p>
+                  </div>
+                  {isFriend(u.id) ? (
+                    <span className="text-xs font-black text-emerald-500 flex items-center gap-1"><UserCheck size={13} />フレンド</span>
+                  ) : isPending(u.id) ? (
+                    <span className="text-xs font-black text-slate-400">申請済み</span>
+                  ) : (
+                    <button type="button" onClick={() => sendFriendRequest(u)} disabled={sendingReq === u.id}
+                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-90 transition-transform disabled:opacity-50 flex items-center gap-1">
+                      {sendingReq === u.id ? <Loader2 size={12} className="animate-spin" /> : <><UserPlus size={12} />申請</>}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* フレンド一覧 */}
+          <div>
+            <p className="text-xs font-black text-slate-500 mb-2">👥 フレンド {friendUsers.length}人</p>
+            {friendUsers.length === 0 ? (
+              <div className="text-center py-8 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="text-sm font-bold text-slate-400">まだフレンドがいません</p>
+                <p className="text-xs text-slate-300 mt-1">上の検索からフレンド申請しよう</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                {friendUsers.map(u => (
+                  <div key={u.id} className="flex items-center gap-3 p-3 border-b border-slate-50 last:border-0">
+                    <img src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`} className="w-9 h-9 rounded-xl" alt="" />
+                    <div className="flex-1 text-left">
+                      <p className="font-black text-sm text-slate-800">{u.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold">Lv.{u.level || 1} · 🔥{u.streak || 0}日 · {u.totalXP || 0} XP</p>
+                    </div>
+                    <Heart size={14} className="text-pink-400" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* フィード */}
       {tab === 'feed' && (
         <PlaceFeed db={db} appId={appId} currentUserId={currentUser.id} />
       )}
 
+      {/* 協力クエスト */}
       {tab === 'coop' && (
         <div className="space-y-3">
-          <p className="text-xs text-slate-400 font-bold text-left">みんなで一緒に達成するクエスト</p>
-          {coopQuests.map(q => (
-            <div key={q.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-              <div className="flex items-start gap-3 mb-3">
-                <span className="text-3xl">{q.emoji}</span>
-                <div className="flex-1 text-left">
-                  <h4 className="font-black text-sm text-slate-800">{q.title}</h4>
-                  <p className="text-xs text-slate-500 font-bold">{q.desc}</p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs font-black text-amber-500">⚡+{q.xp} XP</span>
-                    <span className="text-xs font-bold text-slate-400">👥 {q.participants}人参加中</span>
-                  </div>
-                </div>
-              </div>
-              <button type="button" onClick={() => handleJoin(q)} disabled={joining === q.id} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm">
-                {joining === q.id ? <><Loader2 size={14} className="animate-spin" />参加中...</> : <><Users size={14} />参加する</>}
+          <p className="text-xs text-slate-400 font-bold text-left">フレンドと一緒に達成するクエスト。過半数がクリアするとボーナスXP！</p>
+          {friendUsers.length === 0 ? (
+            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+              <p className="text-sm font-bold text-slate-400">フレンドを追加すると協力クエストが現れます</p>
+            </div>
+          ) : coopQuests.length === 0 ? (
+            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+              <Loader2 size={20} className="animate-spin text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-400">本日の協力クエストを生成中...</p>
+              <button type="button" onClick={async () => {
+                // 協力クエストを新規作成
+                const todayKey = new Date().toDateString();
+                const memberIds = [currentUser.id, ...friendUsers.map(u => u.id)];
+                const pool = [
+                  { title: '全員で水分補給', description: 'コップ1杯の水を飲む', xp: 5, bonusXP: 30, emoji: '💧' },
+                  { title: '全員でストレッチ', description: '肩・首を各30秒伸ばす', xp: 8, bonusXP: 50, emoji: '🧘' },
+                  { title: '全員で外を歩く', description: '10分間外を歩く', xp: 10, bonusXP: 60, emoji: '🚶' },
+                  { title: '全員で深呼吸', description: 'ゆっくり10回深呼吸する', xp: 5, bonusXP: 25, emoji: '🌬️' },
+                  { title: '全員で読書', description: '本・記事を10分読む', xp: 8, bonusXP: 45, emoji: '📚' },
+                ];
+                const q = pool[Math.floor(Math.random() * pool.length)];
+                const col = collection(db, 'artifacts', appId, 'public', 'data', 'coop_quests');
+                await addDoc(col, {
+                  ...q, memberIds, completedBy: [], bonusAwarded: false, dateKey: todayKey, createdAt: Date.now(),
+                });
+              }} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-90 transition-transform">
+                クエストを作成
               </button>
             </div>
-          ))}
+          ) : (
+            coopQuests.map(cq => {
+              const total = cq.memberIds.length;
+              const needed = Math.ceil(total / 2);
+              const completedBy = cq.completedBy || [];
+              const myDone = completedBy.includes(currentUser.id);
+              const bonusDone = cq.bonusAwarded;
+              const pct = Math.round((completedBy.length / total) * 100);
+              return (
+                <div key={cq.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="text-3xl">{cq.emoji}</span>
+                    <div className="flex-1 text-left">
+                      <h4 className="font-black text-sm text-slate-800">{cq.title}</h4>
+                      <p className="text-xs text-slate-500 font-bold">{cq.description}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs font-black text-amber-500">⚡+{cq.xp} XP</span>
+                        <span className="text-xs font-black text-violet-500">🎁 過半数達成 +{cq.bonusXP} XP</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 進捗バー */}
+                  <div className="mb-3">
+                    <div className="flex justify-between text-[10px] font-black text-slate-400 mb-1">
+                      <span>{completedBy.length} / {total}人クリア</span>
+                      <span>過半数まで あと{Math.max(0, needed - completedBy.length)}人</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+
+                  {/* メンバー状況 */}
+                  <div className="flex gap-1.5 mb-3 flex-wrap">
+                    {cq.memberIds.map(mid => {
+                      const u = allUsers.find(u => u.id === mid);
+                      const done = completedBy.includes(mid);
+                      return (
+                        <div key={mid} className="flex flex-col items-center gap-0.5">
+                          <div className="relative">
+                            <img src={u?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mid}`}
+                              className={`w-8 h-8 rounded-xl border-2 ${done ? 'border-emerald-400' : 'border-slate-200'}`} alt="" />
+                            {done && <span className="absolute -top-1 -right-1 text-[10px]">✅</span>}
+                          </div>
+                          <span className="text-[9px] font-black text-slate-400 max-w-[32px] truncate">{u?.name || '?'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {bonusDone ? (
+                    <div className="w-full py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-black text-xs text-center border border-emerald-200">
+                      🎉 ボーナス達成済み！
+                    </div>
+                  ) : myDone ? (
+                    <div className="w-full py-2.5 bg-slate-50 text-slate-400 rounded-xl font-black text-xs text-center">
+                      ✅ クリア済み・仲間を待っています...
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => handleCoopComplete(cq)} disabled={joiningCoop === cq.id}
+                      className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm">
+                      {joiningCoop === cq.id ? <><Loader2 size={14} className="animate-spin" />クリア中...</> : <><CheckCircle2 size={14} />クリアする</>}
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
     </div>
@@ -2328,7 +2643,7 @@ export default function App() {
           </div>
         )}
         {/* ← db, appId を追加 */}
-        {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} db={db} appId={appId} />}
+        {activeTab === 'social' && <SocialTab currentUser={currentUser} allUsers={allUsers} onUpdateUser={saveUser} db={db} appId={appId} onQuestComplete={handleQuestComplete} />}
         {activeTab === 'badges' && <BadgesTab currentUser={currentUser} maxXP={maxXP} handleLogout={handleLogout} onEditProfile={() => setIsEditingProfile(true)} />}
         {activeTab === 'admin' && isAdmin && <AdminTab currentUser={currentUser} db={db} appId={appId} allUsers={allUsers} onUserDeleted={(id) => setAllUsers(prev => prev.filter(u => u.id !== id))} />}
       </main>
