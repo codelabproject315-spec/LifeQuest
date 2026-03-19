@@ -383,6 +383,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
       // 通常モード: 1本指タッチを回転に変換（画面中心からの角度変化で計算）
       let lastAngle = null;
+      let touchMoved = false;
       const getAngle = (touch) => {
         const canvas = map.getCanvas();
         const rect = canvas.getBoundingClientRect();
@@ -394,32 +395,35 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         if (demoModeRef.current) return;
         if (e.touches.length !== 1) return;
         lastAngle = getAngle(e.touches[0]);
+        touchMoved = false;
         userIsInteractingRef.current = true;
       };
       const onTouchMove = (e) => {
         if (demoModeRef.current) return;
         if (e.touches.length !== 1 || lastAngle === null) return;
-        e.preventDefault();
         const angle = getAngle(e.touches[0]);
         let delta = angle - lastAngle;
-        // 180度の折り返しを補正
         if (delta > 180) delta -= 360;
         if (delta < -180) delta += 360;
+        // 微小な動きは無視（タップとドラッグを区別）
+        if (Math.abs(delta) < 0.5) return;
+        e.preventDefault();
+        touchMoved = true;
         lastAngle = angle;
         const newBearing = map.getBearing() - delta;
         map.setBearing(newBearing);
         setMapBearing(newBearing);
         headingBearingRef.current = newBearing;
       };
-      const onTouchEnd = () => { lastAngle = null; };
+      const onTouchEnd = () => { lastAngle = null; touchMoved = false; };
       const canvasEl = map.getCanvas();
       canvasEl.addEventListener('touchstart', onTouchStart, { passive: true });
       canvasEl.addEventListener('touchmove', onTouchMove, { passive: false });
       canvasEl.addEventListener('touchend', onTouchEnd);
 
-      // 初期状態（通常モード）でパンのみ無効、回転は1本指でできるよう残す
+      // 通常モード: dragPan.disable()はrenderに影響することがあるので
+      // moveイベントでセンターをキャラ位置に戻す方式でパンを防ぐ
       if (!demoModeRef.current) {
-        map.dragPan.disable();
         map.dragRotate.enable();
         map.touchPitch.disable();
       }
@@ -548,11 +552,24 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       map.touchPitch.enable();
     } else {
       map.dragPan.disable();
-      map.dragRotate.enable(); // 1本指回転は通常モードでも有効
+      map.dragRotate.enable();
       map.touchPitch.disable();
       userIsInteractingRef.current = false;
     }
   }, [demoMode]);
+
+  // 通常モード: ドラッグでパンされてもキャラ位置に戻し続ける
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || demoMode) return;
+    const lockCenter = () => {
+      const loc = activeLocationRef.current;
+      if (!loc || userIsInteractingRef.current) return;
+      map.setCenter([loc.lng, loc.lat]);
+    };
+    map.on('drag', lockCenter);
+    return () => map.off('drag', lockCenter);
+  }, [mapInstance, demoMode]);
 
   // カメラ追従
   useEffect(() => {
