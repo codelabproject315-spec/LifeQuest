@@ -939,100 +939,119 @@ const SocialTab = ({ currentUser, allUsers, onUpdateUser, db, appId, onQuestComp
             <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-slate-200">
               <p className="text-sm font-bold text-slate-400">フレンドを追加すると協力クエストが現れます</p>
             </div>
-          ) : coopQuests.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-              <Loader2 size={20} className="animate-spin text-slate-300 mx-auto mb-2" />
-              <p className="text-sm font-bold text-slate-400">本日の協力クエストを生成中...</p>
-              <button type="button" onClick={async () => {
-                // 協力クエストを新規作成
-                const todayKey = new Date().toDateString();
-                const memberIds = [currentUser.id, ...friendUsers.map(u => u.id)];
-                const pool = [
-                  { title: '全員で水分補給', description: 'コップ1杯の水を飲む', xp: 5, bonusXP: 30, emoji: '💧' },
-                  { title: '全員でストレッチ', description: '肩・首を各30秒伸ばす', xp: 8, bonusXP: 50, emoji: '🧘' },
-                  { title: '全員で外を歩く', description: '10分間外を歩く', xp: 10, bonusXP: 60, emoji: '🚶' },
-                  { title: '全員で深呼吸', description: 'ゆっくり10回深呼吸する', xp: 5, bonusXP: 25, emoji: '🌬️' },
-                  { title: '全員で読書', description: '本・記事を10分読む', xp: 8, bonusXP: 45, emoji: '📚' },
-                ];
-                const q = pool[Math.floor(Math.random() * pool.length)];
-                const col = collection(db, 'artifacts', appId, 'public', 'data', 'coop_quests');
-                await addDoc(col, {
-                  ...q, memberIds, completedBy: [], bonusAwarded: false, dateKey: todayKey, createdAt: Date.now(),
-                });
-              }} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-90 transition-transform">
-                クエストを作成
-              </button>
-            </div>
-          ) : (
-            coopQuests.map(cq => {
-              const total = cq.memberIds.length;
-              const needed = Math.ceil(total / 2);
-              const completedBy = cq.completedBy || [];
-              const myDone = completedBy.includes(currentUser.id);
-              const bonusDone = cq.bonusAwarded;
-              const pct = Math.round((completedBy.length / total) * 100);
-              return (
-                <div key={cq.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                  <div className="flex items-start gap-3 mb-3">
-                    <span className="text-3xl">{cq.emoji}</span>
-                    <div className="flex-1 text-left">
-                      <h4 className="font-black text-sm text-slate-800">{cq.title}</h4>
-                      <p className="text-xs text-slate-500 font-bold">{cq.description}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs font-black text-amber-500">⚡+{cq.xp} XP</span>
-                        <span className="text-xs font-black text-violet-500">🎁 過半数達成 +{cq.bonusXP} XP</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 進捗バー */}
-                  <div className="mb-3">
-                    <div className="flex justify-between text-[10px] font-black text-slate-400 mb-1">
-                      <span>{completedBy.length} / {total}人クリア</span>
-                      <span>過半数まで あと{Math.max(0, needed - completedBy.length)}人</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-
-                  {/* メンバー状況 */}
-                  <div className="flex gap-1.5 mb-3 flex-wrap">
-                    {cq.memberIds.map(mid => {
-                      const u = allUsers.find(u => u.id === mid);
-                      const done = completedBy.includes(mid);
-                      return (
-                        <div key={mid} className="flex flex-col items-center gap-0.5">
-                          <div className="relative">
-                            <img src={u?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mid}`}
-                              className={`w-8 h-8 rounded-xl border-2 ${done ? 'border-emerald-400' : 'border-slate-200'}`} alt="" />
-                            {done && <span className="absolute -top-1 -right-1 text-[10px]">✅</span>}
-                          </div>
-                          <span className="text-[9px] font-black text-slate-400 max-w-[32px] truncate">{u?.name || '?'}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {bonusDone ? (
-                    <div className="w-full py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-black text-xs text-center border border-emerald-200">
-                      🎉 ボーナス達成済み！
-                    </div>
-                  ) : myDone ? (
-                    <div className="w-full py-2.5 bg-slate-50 text-slate-400 rounded-xl font-black text-xs text-center">
-                      ✅ クリア済み・仲間を待っています...
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => handleCoopComplete(cq)} disabled={joiningCoop === cq.id}
-                      className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm">
-                      {joiningCoop === cq.id ? <><Loader2 size={14} className="animate-spin" />クリア中...</> : <><CheckCircle2 size={14} />クリアする</>}
+          ) : (() => {
+            const activeQuests = coopQuests.filter(cq => !cq.bonusAwarded);
+            const completedQuests = coopQuests.filter(cq => cq.bonusAwarded);
+            const createQuest = async () => {
+              const todayKey = new Date().toDateString();
+              const memberIds = [currentUser.id, ...friendUsers.map(u => u.id)];
+              const pool = [
+                { title: '全員で水分補給', description: 'コップ1杯の水を飲む', xp: 5, bonusXP: 30, emoji: '💧' },
+                { title: '全員でストレッチ', description: '肩・首を各30秒伸ばす', xp: 8, bonusXP: 50, emoji: '🧘' },
+                { title: '全員で外を歩く', description: '10分間外を歩く', xp: 10, bonusXP: 60, emoji: '🚶' },
+                { title: '全員で深呼吸', description: 'ゆっくり10回深呼吸する', xp: 5, bonusXP: 25, emoji: '🌬️' },
+                { title: '全員で読書', description: '本・記事を10分読む', xp: 8, bonusXP: 45, emoji: '📚' },
+              ];
+              const q = pool[Math.floor(Math.random() * pool.length)];
+              const col = collection(db, 'artifacts', appId, 'public', 'data', 'coop_quests');
+              await addDoc(col, {
+                ...q, memberIds, completedBy: [], bonusAwarded: false, dateKey: todayKey, createdAt: Date.now(),
+              });
+            };
+            return (
+              <>
+                {/* アクティブなクエストがない時は作成ボタン */}
+                {activeQuests.length === 0 && (
+                  <div className="text-center py-8 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                    {completedQuests.length > 0
+                      ? <p className="text-sm font-bold text-emerald-500 mb-3">🎉 全クエスト完了！次のクエストを作ろう</p>
+                      : <p className="text-sm font-bold text-slate-400 mb-3">本日の協力クエストを作成しよう</p>
+                    }
+                    <button type="button" onClick={createQuest}
+                      className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-sm active:scale-90 transition-transform">
+                      ＋ 新しいクエストを作成
                     </button>
-                  )}
-                </div>
-              );
-            })
-          )}
+                  </div>
+                )}
+
+                {/* アクティブなクエスト */}
+                {activeQuests.map(cq => {
+                  const total = cq.memberIds.length;
+                  const needed = Math.ceil(total / 2);
+                  const completedBy = cq.completedBy || [];
+                  const myDone = completedBy.includes(currentUser.id);
+                  const pct = Math.round((completedBy.length / total) * 100);
+                  return (
+                    <div key={cq.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="text-3xl">{cq.emoji}</span>
+                        <div className="flex-1 text-left">
+                          <h4 className="font-black text-sm text-slate-800">{cq.title}</h4>
+                          <p className="text-xs text-slate-500 font-bold">{cq.description}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs font-black text-amber-500">⚡+{cq.xp} XP</span>
+                            <span className="text-xs font-black text-violet-500">🎁 過半数達成 +{cq.bonusXP} XP</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <div className="flex justify-between text-[10px] font-black text-slate-400 mb-1">
+                          <span>{completedBy.length} / {total}人クリア</span>
+                          <span>過半数まで あと{Math.max(0, needed - completedBy.length)}人</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 mb-3 flex-wrap">
+                        {cq.memberIds.map(mid => {
+                          const u = allUsers.find(u => u.id === mid);
+                          const done = completedBy.includes(mid);
+                          return (
+                            <div key={mid} className="flex flex-col items-center gap-0.5">
+                              <div className="relative">
+                                <img src={u?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${mid}`}
+                                  className={`w-8 h-8 rounded-xl border-2 ${done ? 'border-emerald-400' : 'border-slate-200'}`} alt="" />
+                                {done && <span className="absolute -top-1 -right-1 text-[10px]">✅</span>}
+                              </div>
+                              <span className="text-[9px] font-black text-slate-400 max-w-[32px] truncate">{u?.name || '?'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {myDone ? (
+                        <div className="w-full py-2.5 bg-slate-50 text-slate-400 rounded-xl font-black text-xs text-center">
+                          ✅ クリア済み・仲間を待っています...
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => handleCoopComplete(cq)} disabled={joiningCoop === cq.id}
+                          className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm">
+                          {joiningCoop === cq.id ? <><Loader2 size={14} className="animate-spin" />クリア中...</> : <><CheckCircle2 size={14} />クリアする</>}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* 完了済みクエスト */}
+                {completedQuests.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-slate-400">✅ 完了済み</p>
+                    {completedQuests.map(cq => (
+                      <div key={cq.id} className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center gap-3 opacity-60">
+                        <span className="text-2xl">{cq.emoji}</span>
+                        <div className="flex-1 text-left">
+                          <p className="font-black text-sm text-slate-600">{cq.title}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">🎉 ボーナス達成済み +{cq.bonusXP} XP</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
