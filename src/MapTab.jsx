@@ -483,6 +483,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         });
 
         setPOIListRef.current(poiDataList);
+        console.log('[PIN] setPOIList 呼び出し:', poiDataList.length, '件');
       })();
       // ── POI取得ここまで ──────────────────────────────────
 
@@ -602,7 +603,11 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
 
   // 毎フレームPOIの画面座標を再計算
   useEffect(() => {
-    if (!mapInstance || poiList.length === 0) return;
+    if (!mapInstance || poiList.length === 0) {
+      console.log('[PIN] pinPositions useEffect スキップ - mapInstance:', !!mapInstance, 'poiList:', poiList.length);
+      return;
+    }
+    console.log('[PIN] render イベント登録 poiList:', poiList.length, '件');
     const update = () => {
       setPinPositions(poiList.map(poi => {
         const p = mapInstance.project([poi.lng, poi.lat]);
