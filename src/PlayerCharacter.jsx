@@ -56,11 +56,13 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm', onH
             this.scene.add(vrm.scene);
             vrmRef.current = vrm;
             vrm.scene.scale.set(10, 10, 10);
-            // 建物より常に手前に描画（depthTestをオフ）
+            // 建物より常に手前に描画
+            vrm.scene.renderOrder = 999;
             vrm.scene.traverse(obj => {
+              obj.renderOrder = 999;
               if (obj.material) {
                 const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-                mats.forEach(m => { m.depthTest = false; m.depthWrite = false; });
+                mats.forEach(m => { m.depthTest = false; });
               }
             });
           },
