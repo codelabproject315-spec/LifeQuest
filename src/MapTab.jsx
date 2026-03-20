@@ -494,7 +494,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         map.addLayer({
           id: '3d-buildings', source: buildingSource, 'source-layer': 'building',
           type: 'fill-extrusion', minzoom: 15,
-          paint: { 'fill-extrusion-color': '#7ecfcf', 'fill-extrusion-height': ['get', 'render_height'] }
+          paint: { 'fill-extrusion-color': '#7ecfcf', 'fill-extrusion-height': ['min', ['get', 'render_height'], 20] }
         });
       } catch (e) { console.warn('3d-buildings error:', e); }
       try {
@@ -615,6 +615,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
       }));
     };
     update();
+    console.log('[PIN] pinPositions 初回計算:', poiList.map(p => ({ name: p.name, x: Math.round(mapInstance.project([p.lng, p.lat]).x), y: Math.round(mapInstance.project([p.lng, p.lat]).y) })));
     mapInstance.on('render', update);
     return () => mapInstance.off('render', update);
   }, [mapInstance, poiList]);
