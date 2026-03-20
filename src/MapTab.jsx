@@ -494,7 +494,7 @@ const MapTab = ({ quests, userLocation, gpsStatus, mockOffset, setMockOffset, QU
         map.addLayer({
           id: '3d-buildings', source: buildingSource, 'source-layer': 'building',
           type: 'fill-extrusion', minzoom: 15,
-          paint: { 'fill-extrusion-color': '#7ecfcf', 'fill-extrusion-height': ['min', ['get', 'render_height'], 20] }
+          paint: { 'fill-extrusion-color': '#7ecfcf', 'fill-extrusion-height': ['min', ['get', 'render_height'], 20], 'fill-extrusion-opacity': 0.4 }
         });
       } catch (e) { console.warn('3d-buildings error:', e); }
       try {
