@@ -56,6 +56,13 @@ const PlayerCharacter = ({ map, lat, lng, bearing, modelPath = '/model.vrm', onH
             this.scene.add(vrm.scene);
             vrmRef.current = vrm;
             vrm.scene.scale.set(10, 10, 10);
+            // 建物より常に手前に描画（depthTestをオフ）
+            vrm.scene.traverse(obj => {
+              if (obj.material) {
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                mats.forEach(m => { m.depthTest = false; m.depthWrite = false; });
+              }
+            });
           },
           (progress) => {
             if (progress.total > 0) console.log('[VRM] 進捗:', Math.round(progress.loaded / progress.total * 100) + '%');
